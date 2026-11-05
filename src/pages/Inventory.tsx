@@ -12,8 +12,6 @@ const movLabel: Record<string, string> = { purchase_receipt: 'Recebimento de com
 
 export function InventoryPage() {
   const { wsId, can, tz } = useAuth()
-  const toast = useToast()
-  const qc = useQueryClient()
   const [tab, setTab] = useState('produtos')
   const [q, setQ] = useState('')
   const [low, setLow] = useState(false)
@@ -26,23 +24,10 @@ export function InventoryPage() {
     if (error) throw error
     return data ?? []
   } })
-  const counts = useQuery({ queryKey: ['inv-counts', wsId], enabled: tab === 'inv', queryFn: async () => (await supabase.from('inventory_counts').select('*').eq('workshop_id', wsId).order('created_at', { ascending: false }).limit(20)).data ?? [] })
-
-  async function newCount() {
-    try {
-      const { data: c, error } = await supabase.from('inventory_counts').insert({ workshop_id: wsId }).select('id').single()
-      if (error) throw error
-      const prods = await rpc<any[]>('product_list', { p_workshop: wsId, p_limit: 1000 })
-      const { error: e2 } = await supabase.from('inventory_count_items').insert(prods.map((p) => ({ count_id: c.id, workshop_id: wsId, product_id: p.id, expected: p.on_hand })))
-      if (e2) throw e2
-      qc.invalidateQueries({ queryKey: ['inv-counts'] }); toast.success('Inventário aberto')
-    } catch (e) { toast.error(e) }
-  }
-
   return (
     <div>
       <PageHeader title="Estoque" actions={can('inventory.edit') && <Button onClick={() => setEdit({})}><Plus className="size-4" />Nova peça</Button>} />
-      <Tabs value={tab} onChange={setTab} tabs={[{ key: 'produtos', label: 'Peças e produtos' }, ...(can('costs.view') ? [{ key: 'mov', label: 'Movimentações' }] : []), ...(can('inventory.adjust') ? [{ key: 'inv', label: 'Inventário' }] : [])]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ key: 'produtos', label: 'Peças e produtos' }, ...(can('costs.view') ? [{ key: 'mov', label: 'Movimentações' }] : [])]} />
       {tab === 'produtos' && <div className="card">
         <div className="grid gap-3 p-3 sm:grid-cols-3"><Input label="Buscar" value={q} onChange={(e) => { setQ(e.target.value); setPage(0) }} placeholder="Nome, código interno, fabricante ou código de barras" />
           <div className="flex items-end pb-2"><Checkbox label="Somente estoque baixo" checked={low} onChange={(v) => { setLow(v); setPage(0) }} /></div></div>
@@ -69,39 +54,8 @@ export function InventoryPage() {
             <td className={`td ${Number(m.quantity) < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmtQty(m.quantity)}</td><td className="td">{fmtQty(m.balance_after)}</td><td className="td">{brl(m.unit_cost_cents)}</td>
             <td className="td text-xs">{m.reason}{m.negative_override_reason && <span className="block text-red-600">Saldo negativo autorizado: {m.negative_override_reason}</span>}</td></tr>)}
         </Table>)}</Card>}
-      {tab === 'inv' && <Card title="Inventários" actions={<Button size="sm" onClick={newCount}>Abrir contagem</Button>}>
-        {counts.data?.map((c: any) => <InventoryCount key={c.id} count={c} />)}
-        {counts.data?.length === 0 && <p className="text-sm text-slate-500">Nenhum inventário.</p>}
-      </Card>}
       <ProductModal p={edit} onClose={() => setEdit(null)} />
       <AdjustModal p={adjust} onClose={() => setAdjust(null)} />
-    </div>
-  )
-}
-
-function InventoryCount({ count }: { count: any }) {
-  const toast = useToast()
-  const qc = useQueryClient()
-  const { tz } = useAuth()
-  const [open, setOpen] = useState(count.status === 'open')
-  const items = useQuery({ queryKey: ['inv-items', count.id], enabled: open, queryFn: async () => (await supabase.from('inventory_count_items').select('*, products(sku, name, unit)').eq('count_id', count.id)).data ?? [] })
-  async function setCounted(pid: string, v: string) {
-    const { error } = await supabase.from('inventory_count_items').update({ counted: v === '' ? null : Number(v.replace(',', '.')) }).eq('count_id', count.id).eq('product_id', pid)
-    if (error) toast.error(error)
-  }
-  async function close() {
-    if (!confirm('Encerrar o inventário e gerar os ajustes das divergências?')) return
-    try { const n = await rpc<number>('close_inventory', { p_count: count.id }); toast.success(`${n} ajuste(s) gerado(s)`); qc.invalidateQueries() } catch (e) { toast.error(e) }
-  }
-  return (
-    <div className="mb-3 rounded-md border border-slate-200 p-3">
-      <div className="flex items-center gap-2 text-sm"><button className="font-medium text-brand" onClick={() => setOpen(!open)}>Inventário de {fmtDateTime(count.created_at, tz)}</button><Badge tone={count.status === 'open' ? 'amber' : 'gray'}>{count.status === 'open' ? 'aberto' : 'encerrado'}</Badge>
-        {count.status === 'open' && <Button size="sm" className="ml-auto" onClick={close}>Encerrar e ajustar</Button>}</div>
-      {open && items.data && <table className="mt-2 w-full text-sm"><thead><tr><th className="th">Peça</th><th className="th">Esperado</th><th className="th">Contado</th></tr></thead><tbody>
-        {items.data.map((i: any) => <tr key={i.product_id}><td className="td">{i.products?.sku} {i.products?.name}</td><td className="td">{fmtQty(i.expected)}</td>
-          <td className="td">{count.status === 'open' ? <input className="input h-8 w-28 py-0" inputMode="decimal" defaultValue={i.counted ?? ''} aria-label={`Contado ${i.products?.name}`} onBlur={(e) => setCounted(i.product_id, e.target.value)} /> : fmtQty(i.counted ?? 0)}
-            {i.counted !== null && Number(i.counted) !== Number(i.expected) && <Badge tone="amber">divergência</Badge>}</td></tr>)}
-      </tbody></table>}
     </div>
   )
 }

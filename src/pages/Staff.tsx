@@ -2,7 +2,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Copy, MessageCircle, UserPlus } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
 import { useTeam } from '@/components/pickers'
 import { Badge, Button, Input, Loading, Modal, useToast } from '@/components/ui'
@@ -115,12 +114,10 @@ function AddStaff({ open, onClose }: { open: boolean; onClose: () => void }) {
 }
 
 export function StaffPage() {
-  const { can } = useAuth()
   return (
     <div className="space-y-3">
       <h1 className="font-heading text-2xl font-extrabold">Funcionários</h1>
       <StaffSettings />
-      {can('team.manage') && <p className="text-sm text-slate-500">Precisa de ajuste fino por pessoa? <Link className="font-medium text-brand" to="/equipe">Permissões avançadas</Link></p>}
     </div>
   )
 }

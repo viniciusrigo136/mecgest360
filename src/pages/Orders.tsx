@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Camera, CheckCircle2, ChevronDown, ChevronLeft, Link2, MessageCircle, Pause, Play, Plus, Printer } from 'lucide-react'
+import { Camera, CheckCircle2, ChevronDown, ChevronLeft, FileDown, Link2, MessageCircle, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
@@ -15,6 +15,8 @@ import { rpc, supabase } from '@/lib/supabase'
 import { portalUrl, waLink } from '@/lib/whatsapp'
 import { Plate } from '@/components/Plate'
 import { RemindersCard, ReturnPicker } from '@/components/ReturnReminder'
+import { PixBox } from '@/components/PixBox'
+import { loadWorkshopDoc } from '@/lib/workshop'
 import { CarCard } from './Dashboard'
 import { MaintenancePlanModal } from './Maintenance'
 
@@ -180,7 +182,7 @@ export function OrderDetail() {
           {wa && can('messages.send') && <a className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-wa px-3 text-sm font-medium text-white" target="_blank" rel="noopener noreferrer" href={wa}
             onClick={() => rpc('log_contact', { p_workshop: wsId, p_client: o.client.id, p_channel: 'whatsapp', p_kind: 'conversation_opened', p_message: waText, p_outcome: null, p_order: id }).catch(() => {})}><MessageCircle className="size-4" />WhatsApp</a>}
           {(can('messages.send') || can('orders.edit')) && <Button variant="secondary" onClick={() => setModal('portal')}><Link2 className="size-4" />Link do cliente</Button>}
-          {can('orders.print') && <Button variant="secondary" onClick={() => window.print()}><Printer className="size-4" />Imprimir</Button>}
+          {can('orders.print') && <Button variant="secondary" onClick={() => orderPdf(o, wsId).catch((e) => toast.error(e))}><FileDown className="size-4" />PDF</Button>}
         </div>
       </section>
 
@@ -201,6 +203,8 @@ export function OrderDetail() {
         )}
         {o.totals && <p className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-heading text-lg font-extrabold"><span>Total</span><span>{brl(o.totals.approved_total_cents)}</span></p>}
       </section>
+
+      {can('costs.view') && o.status !== 'cancelled' && <ExpensesCard o={o} />}
 
       {o.status !== 'cancelled' && <RemindersCard orderId={o.id} items={o.items.filter((i: any) => i.kind !== 'part' && i.status !== 'cancelled').map((i: any) => i.description)} />}
 
@@ -343,6 +347,9 @@ function DeliverSimpleModal({ open, onClose, o, reload }: { open: boolean; onClo
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (open) setMode('') }, [open])
   const canCharge = can('payments.receive')
+  const { wsId } = useAuth()
+  const pixQ = useQuery({ queryKey: ['ws-doc', wsId], enabled: open, queryFn: () => loadWorkshopDoc(wsId) })
+  const pix = pixQ.data?.pix_key ? pixQ.data : null
   async function go() {
     setBusy(true)
     try { await rpc('deliver_simple', { p_order: o.id, p_mode: mode, p_method: mode === 'paid_now' ? method : null, p_due: mode === 'later' ? due : null }); toast.success('Carro entregue'); reload(); onClose() }
@@ -364,6 +371,7 @@ function DeliverSimpleModal({ open, onClose, o, reload }: { open: boolean; onClo
             <button key={v} onClick={() => setMethod(v)} aria-pressed={method === v} className={clsx('h-11 rounded-xl border font-medium', method === v ? 'border-brand bg-brand text-white' : 'border-slate-300')}>{l}</button>
           ))}</div>
         )}
+        {mode === 'paid_now' && method === 'pix' && pix && o.totals && <PixBox compact pix={{ key: pix.pix_key!, name: pix.pix_name || pix.name, city: pix.pix_city || pix.address?.city || 'BRASIL', amount_cents: Number(o.totals.approved_total_cents) }} />}
         {opt('already_paid', 'Já tinha pago', 'Sem lançar valor agora')}
         {canCharge && opt('later', 'Vai pagar depois', 'Fica em aberto no financeiro')}
         {mode === 'later' && <Input label="Paga até" type="date" value={due} onChange={(e) => setDue(e.target.value)} />}
@@ -849,5 +857,75 @@ export function PortalLinkModal({ open, onClose, orderId, quoteId, purpose = 'tr
         </div>
       )}
     </Modal>
+  )
+}
+
+/** PDF A4 do serviço (sem custos nem notas internas). */
+async function orderPdf(o: any, wsId: string) {
+  const [workshop, { buildPdf, sharePdf }] = await Promise.all([loadWorkshopDoc(wsId), import('@/lib/pdf')])
+  const items = o.items.filter((i: any) => ['approved', 'in_progress', 'done'].includes(i.status))
+  const blob = await buildPdf({
+    kind: 'ORDEM DE SERVIÇO', number: o.number, date: o.entry_at, workshop,
+    client: { name: o.client?.name ?? '', phone: o.client?.whatsapp_norm },
+    vehicle: { plate: o.vehicle?.plate ?? o.vehicle?.internal_code, label: [o.vehicle?.brand, o.vehicle?.model, o.vehicle?.year_model].filter(Boolean).join(' '), km: o.km_entry },
+    items: items.map((i: any) => ({ description: i.description, quantity: Number(i.quantity), unit_cents: Number(i.unit_price_cents ?? 0), discount_cents: Number(i.discount_cents ?? 0), total_cents: Number(i.total_cents ?? 0) })),
+    total_cents: Number(o.totals?.approved_total_cents ?? 0),
+    notes: [o.complaint && `Pedido do cliente: ${o.complaint}`, o.notes_client, o.warranty_terms && `Garantia: ${o.warranty_terms}`],
+    pix: ['ready', 'delivered'].includes(o.status),
+  })
+  await sharePdf(blob, `${o.number}.pdf`)
+}
+
+/** Gastos do serviço e quanto sobrou (só para quem vê custos). */
+function ExpensesCard({ o }: { o: any }) {
+  const { wsId } = useAuth()
+  const toast = useToast()
+  const qc = useQueryClient()
+  const list = useQuery({ queryKey: ['expenses', o.id], queryFn: async () => (await supabase.from('order_expenses').select('*').eq('order_id', o.id).order('created_at')).data ?? [] })
+  const profit = useQuery({ queryKey: ['profit', o.id, list.data?.length, o.version], queryFn: () => rpc<any>('order_profit', { p_order: o.id }) })
+  const [desc, setDesc] = useState('')
+  const [val, setVal] = useState<number | null>(null)
+  const [cat, setCat] = useState('peca')
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['expenses', o.id] }); qc.invalidateQueries({ queryKey: ['profit', o.id] }) }
+  async function add() {
+    const { data: u } = await supabase.auth.getUser()
+    const { error } = await supabase.from('order_expenses').insert({ workshop_id: wsId, order_id: o.id, description: desc.trim(), category: cat, amount_cents: val, created_by: u.user?.id })
+    if (error) return toast.error(error)
+    setDesc(''); setVal(null); refresh()
+  }
+  async function remove(id: string) {
+    const { error } = await supabase.from('order_expenses').delete().eq('id', id)
+    if (error) toast.error(error); else refresh()
+  }
+  const p = profit.data
+  return (
+    <section className="card p-4">
+      <h2 className="text-lg font-bold">Gastos do serviço</h2>
+      <p className="mb-2 text-sm text-slate-500">Anote o que gastou (peças compradas, torneiro, material) para saber quanto sobrou. O cliente não vê.</p>
+      {list.data && list.data.length > 0 && (
+        <ul className="mb-2 divide-y divide-slate-100">{list.data.map((e: any) => (
+          <li key={e.id} className="flex items-center gap-2 py-2 text-sm">
+            <span className="flex-1">{e.description} <span className="text-xs text-slate-500">({{ peca: 'peça', terceiro: 'terceiro', material: 'material', outro: 'outro' }[e.category as string]})</span></span>
+            <span className="font-medium">{brl(e.amount_cents)}</span>
+            <button aria-label="Remover gasto" className="rounded p-1 text-slate-400 hover:text-red-600" onClick={() => remove(e.id)}><Trash2 className="size-4" /></button>
+          </li>
+        ))}</ul>
+      )}
+      <div className="grid grid-cols-[1fr_7rem] gap-2 sm:grid-cols-[1fr_8rem_7rem_auto]">
+        <input className="input" aria-label="Descrição do gasto" placeholder="Ex.: Amortecedor (fornecedor)" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <MoneyInput label="" aria-label="Valor do gasto" cents={val} onCents={setVal} className="[&_label]:hidden" />
+        <select className="input" aria-label="Tipo de gasto" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="peca">Peça</option><option value="terceiro">Terceiro</option><option value="material">Material</option><option value="outro">Outro</option>
+        </select>
+        <Button disabled={desc.trim().length < 2 || !val} onClick={add}><Plus className="size-4" />Anotar</Button>
+      </div>
+      {p && (
+        <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center">
+          <div><p className="text-xs text-slate-500">Valor do serviço</p><p className="font-heading text-lg font-extrabold">{brl(p.total_cents)}</p></div>
+          <div><p className="text-xs text-slate-500">Gastos</p><p className="font-heading text-lg font-extrabold text-red-600">{brl(Number(p.expenses_cents) + Number(p.stock_cost_cents))}</p></div>
+          <div><p className="text-xs text-slate-500">Sobrou</p><p className={clsx('font-heading text-lg font-extrabold', Number(p.left_cents) >= 0 ? 'text-emerald-700' : 'text-red-600')}>{brl(p.left_cents)}</p></div>
+        </div>
+      )}
+    </section>
   )
 }

@@ -1,27 +1,24 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Printer } from 'lucide-react'
+import { FileDown, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
-import { useTeam } from '@/components/pickers'
-import { Badge, Button, Card, ErrorBox, Input, Loading, Modal, MoneyInput, PageHeader, Select, Stat, Table, Tabs, Textarea, useToast } from '@/components/ui'
+import { Badge, Button, ErrorBox, Input, Loading, Modal, MoneyInput, PageHeader, Select, Stat, Table, Tabs, Textarea, useToast } from '@/components/ui'
 import { brl, fmtDate, fmtDateTime, todayLocal } from '@/lib/format'
 import { paymentMethodLabel } from '@/lib/labels'
+import { loadWorkshopDoc } from '@/lib/workshop'
 import { rpc, supabase } from '@/lib/supabase'
 
 export function FinancePage() {
   const { can } = useAuth()
   const [params] = useSearchParams()
-  const [tab, setTab] = useState(params.get('conta') ? 'receber' : can('finance.view') ? 'receber' : 'caixa')
+  const [tab, setTab] = useState('receber')
   return (
     <div>
       <PageHeader title="Financeiro" subtitle="Previsto, recebido e vencido são mostrados separadamente. Pix registrado manualmente não é confirmação bancária." />
-      <Tabs value={tab} onChange={setTab} tabs={[...(can('finance.view') ? [{ key: 'receber', label: 'A receber' }, { key: 'pagar', label: 'A pagar' }] : []),
-        ...(can('cash.operate') ? [{ key: 'caixa', label: 'Caixa' }] : []), ...(can('commissions.manage') || can('commissions.view_own') ? [{ key: 'comissoes', label: 'Comissões' }] : [])]} />
+      <Tabs value={tab} onChange={setTab} tabs={[...(can('finance.view') ? [{ key: 'receber', label: 'A receber' }, { key: 'pagar', label: 'A pagar' }] : [])]} />
       {tab === 'receber' && <Accounts kind="receivable" focus={params.get('conta')} />}
       {tab === 'pagar' && <Accounts kind="payable" />}
-      {tab === 'caixa' && <Cash />}
-      {tab === 'comissoes' && <Commissions />}
     </div>
   )
 }
@@ -159,9 +156,19 @@ function AccountModal({ open, kind, onClose }: { open: boolean; kind: string; on
 }
 
 function ReceiptModal({ ctx, onClose }: { ctx: any; onClose: () => void }) {
-  const { ws, tz } = useAuth()
+  const { ws, tz, wsId } = useAuth()
+  const toast = useToast()
+  async function pdf() {
+    try {
+      const [workshop, { buildPdf, sharePdf }] = await Promise.all([loadWorkshopDoc(wsId), import('@/lib/pdf')])
+      const blob = await buildPdf({ kind: 'RECIBO', number: ctx.p.receipt_number, date: ctx.p.paid_at, workshop, client: { name: ctx.a.clients?.name ?? '—' },
+        items: [{ description: `${ctx.a.description} — parcela ${ctx.i.seq} (${paymentMethodLabel[ctx.p.method] ?? ctx.p.method})`, quantity: 1, unit_cents: Number(ctx.p.amount_cents), total_cents: Number(ctx.p.amount_cents) }],
+        total_cents: Number(ctx.p.amount_cents), notes: [`Recebemos de ${ctx.a.clients?.name ?? '—'} a quantia acima em ${fmtDateTime(ctx.p.paid_at, tz)}.`] })
+      await sharePdf(blob, `Recibo-${ctx.p.receipt_number}.pdf`)
+    } catch (e) { toast.error(e) }
+  }
   return (
-    <Modal open={!!ctx} onClose={onClose} title="Recibo" footer={<Button onClick={() => window.print()}><Printer className="size-4" />Imprimir</Button>}>
+    <Modal open={!!ctx} onClose={onClose} title="Recibo" footer={<Button onClick={pdf}><FileDown className="size-4" />Baixar PDF</Button>}>
       {ctx && <div className="space-y-2 text-sm print:text-base">
         <p className="text-lg font-semibold">{ws?.name}</p>
         <p className="font-semibold">RECIBO Nº {ctx.p.receipt_number} — documento não fiscal</p>
@@ -172,75 +179,3 @@ function ReceiptModal({ ctx, onClose }: { ctx: any; onClose: () => void }) {
   )
 }
 
-function Cash() {
-  const { wsId, tz } = useAuth()
-  const toast = useToast()
-  const qc = useQueryClient()
-  const [opening, setOpening] = useState<number | null>(0)
-  const [counted, setCounted] = useState<number | null>(null)
-  const [notes, setNotes] = useState('')
-  const s = useQuery({ queryKey: ['cash', wsId], queryFn: async () => {
-    const { data } = await supabase.from('cash_sessions').select('*, cash_movements(*)').eq('workshop_id', wsId).order('opened_at', { ascending: false }).limit(10)
-    const open = data?.find((x) => !x.closed_at)
-    const expected = open ? await rpc<number>('cash_expected', { p_session: open.id }) : null
-    return { sessions: data ?? [], open, expected }
-  } })
-  async function mov(kind: string) {
-    const v = prompt(`Valor da ${kind} (R$):`); if (!v) return
-    const d = prompt('Descrição:') ?? kind
-    try { await rpc('cash_movement', { p_workshop: wsId, p_kind: kind, p_amount: Math.round(Number(v.replace(',', '.')) * 100), p_description: d }); qc.invalidateQueries({ queryKey: ['cash'] }) } catch (e) { toast.error(e) }
-  }
-  if (s.isLoading) return <Loading />
-  const open = s.data?.open
-  return (
-    <div className="space-y-3">
-      {!open ? (
-        <Card title="Abrir caixa"><div className="flex flex-wrap items-end gap-3"><div className="w-48"><MoneyInput label="Valor de abertura" cents={opening} onCents={setOpening} /></div>
-          <Button onClick={async () => { try { await rpc('open_cash', { p_workshop: wsId, p_opening_cents: opening ?? 0 }); qc.invalidateQueries({ queryKey: ['cash'] }) } catch (e) { toast.error(e) } }}>Abrir caixa</Button></div></Card>
-      ) : (
-        <Card title={`Caixa aberto desde ${fmtDateTime(open.opened_at, tz)}`} actions={<div className="flex gap-1"><Button size="sm" variant="secondary" onClick={() => mov('suprimento')}>Suprimento</Button><Button size="sm" variant="secondary" onClick={() => mov('sangria')}>Sangria</Button><Button size="sm" variant="secondary" onClick={() => mov('saida')}>Saída</Button></div>}>
-          <p className="mb-3 text-sm">Saldo esperado: <strong>{brl(s.data?.expected)}</strong> (abertura {brl(open.opening_cents)} + entradas − saídas)</p>
-          <ul className="mb-3 max-h-60 overflow-y-auto text-sm">{open.cash_movements.map((m: any) => <li key={m.id} className="flex gap-2"><span className="text-slate-500">{fmtDateTime(m.created_at, tz)}</span>{m.kind}<span className={['entrada', 'suprimento'].includes(m.kind) ? 'text-emerald-700' : 'text-red-600'}>{brl(m.amount_cents)}</span>{m.description}</li>)}</ul>
-          <div className="grid gap-3 sm:grid-cols-3"><MoneyInput label="Valor contado no fechamento" cents={counted} onCents={setCounted} /><Input label="Observação (obrigatória se houver diferença)" value={notes} onChange={(e) => setNotes(e.target.value)} className="sm:col-span-2" /></div>
-          <Button className="mt-3" disabled={counted === null} onClick={async () => { try { const r = await rpc<any>('close_cash', { p_workshop: wsId, p_counted_cents: counted, p_notes: notes }); toast.success(`Caixa fechado. Diferença: ${brl(r.difference_cents)}`); qc.invalidateQueries({ queryKey: ['cash'] }) } catch (e) { toast.error(e) } }}>Fechar caixa</Button>
-        </Card>
-      )}
-      <Card title="Fechamentos anteriores"><Table head={['Abertura', 'Fechamento', 'Esperado', 'Contado', 'Diferença']}>
-        {s.data?.sessions.filter((x) => x.closed_at).map((x: any) => <tr key={x.id}><td className="td">{fmtDateTime(x.opened_at, tz)}</td><td className="td">{fmtDateTime(x.closed_at, tz)}</td><td className="td">{brl(x.expected_cents)}</td><td className="td">{brl(x.counted_cents)}</td>
-          <td className={`td ${Number(x.difference_cents) !== 0 ? 'text-red-600' : ''}`}>{brl(x.difference_cents)} {x.notes && <span className="block text-xs text-slate-500">{x.notes}</span>}</td></tr>)}
-      </Table></Card>
-    </div>
-  )
-}
-
-function Commissions() {
-  const { wsId, can } = useAuth()
-  const toast = useToast()
-  const qc = useQueryClient()
-  const team = useTeam()
-  const [rule, setRule] = useState({ membership_id: '', kind: 'percent', value: '', basis: 'competencia' })
-  const entries = useQuery({ queryKey: ['commissions', wsId], queryFn: async () => (await supabase.from('commission_entries').select('*').eq('workshop_id', wsId).order('created_at', { ascending: false }).limit(200)).data ?? [] })
-  const rules = useQuery({ queryKey: ['commission-rules', wsId], enabled: can('commissions.manage'), queryFn: async () => (await supabase.from('commission_rules').select('*').eq('workshop_id', wsId)).data ?? [] })
-  const name = (id: string) => team.data?.find((m) => m.id === id)?.name
-  return (
-    <div className="space-y-3">
-      {can('commissions.manage') && <Card title="Regras de comissão">
-        <p className="mb-2 text-xs text-slate-500">Base: valor líquido do item de serviço executado e atribuído ao funcionário. Competência = na entrega; recebimento = quando a cobrança da OS é quitada. Não é folha de pagamento.</p>
-        <ul className="mb-3 text-sm">{rules.data?.map((r: any) => <li key={r.id}>{name(r.membership_id)}: {r.kind === 'percent' ? `${r.value}%` : brl(Number(r.value) * 100)} por {r.basis} {!r.active && '(inativa)'}</li>)}</ul>
-        <div className="grid gap-2 sm:grid-cols-5">
-          <Select label="Funcionário" value={rule.membership_id} onChange={(e) => setRule((s) => ({ ...s, membership_id: e.target.value }))}><option value="">—</option>{team.data?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select>
-          <Select label="Tipo" value={rule.kind} onChange={(e) => setRule((s) => ({ ...s, kind: e.target.value }))}><option value="percent">Percentual</option><option value="fixed">Valor fixo (R$)</option></Select>
-          <Input label="Valor" value={rule.value} onChange={(e) => setRule((s) => ({ ...s, value: e.target.value }))} />
-          <Select label="Regra" value={rule.basis} onChange={(e) => setRule((s) => ({ ...s, basis: e.target.value }))}><option value="competencia">Competência</option><option value="recebimento">Recebimento</option></Select>
-          <div className="flex items-end"><Button disabled={!rule.membership_id || !rule.value} onClick={async () => { const { error } = await supabase.from('commission_rules').insert({ workshop_id: wsId, ...rule, value: Number(rule.value.replace(',', '.')) }); if (error) toast.error(error); else qc.invalidateQueries({ queryKey: ['commission-rules'] }) }}>Adicionar</Button></div>
-        </div>
-      </Card>}
-      <Card title="Lançamentos" actions={can('commissions.manage') && <Button size="sm" onClick={async () => { const ids = entries.data?.filter((e: any) => e.status === 'pending').map((e: any) => e.id) ?? []; if (!ids.length) return; try { await rpc('approve_commissions', { p_ids: ids }); qc.invalidateQueries({ queryKey: ['commissions'] }) } catch (e) { toast.error(e) } }}>Aprovar pendentes</Button>}>
-        <Table head={['Funcionário', 'OS', 'Base', 'Comissão', 'Regra', 'Situação']} empty={!entries.data?.length}>
-          {entries.data?.map((e: any) => <tr key={e.id}><td className="td">{name(e.membership_id)}</td><td className="td"><Link className="text-brand" to={`/os/${e.order_id}`}>abrir</Link></td><td className="td">{brl(e.base_cents)}</td><td className="td">{brl(e.amount_cents)}</td><td className="td">{e.basis}</td>
-            <td className="td"><Badge tone={e.status === 'approved' ? 'green' : e.status === 'reversed' ? 'red' : 'amber'}>{e.status === 'approved' ? 'Aprovada' : e.status === 'reversed' ? 'Estornada' : 'Pendente'}</Badge></td></tr>)}
-        </Table>
-      </Card>
-    </div>
-  )
-}

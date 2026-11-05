@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Printer, Trash2 } from 'lucide-react'
+import { ChevronRight, FileDown, Plus, Trash2, User } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
-import { ClientVehiclePicker, type Picked } from '@/components/pickers'
+import { ClientSheet } from '@/components/ClientSheet'
+import { type Picked } from '@/components/pickers'
+import { loadWorkshopDoc } from '@/lib/workshop'
 import { Badge, Button, Card, Checkbox, ErrorBox, Input, Loading, Modal, MoneyInput, PageHeader, Pager, Select, StatusBadge, Table, Textarea, useToast, useUnsavedWarning } from '@/components/ui'
 import { brl, fmtDate, fmtDateTime, fmtPlate, fmtQty, todayLocal } from '@/lib/format'
 import { COMPONENTS, kindLabel, quoteStatus } from '@/lib/labels'
@@ -64,6 +66,7 @@ export function QuoteEditor() {
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
   const [modal, setModal] = useState<string | null>(null)
+  const [sheet, setSheet] = useState(false)
   useUnsavedWarning(dirty)
 
   const data = useQuery({ queryKey: ['quote', id], enabled: !!id, queryFn: async () => {
@@ -136,7 +139,7 @@ export function QuoteEditor() {
           {d?.q.status === 'sent' && can('quotes.send') && <Button variant="secondary" onClick={() => setModal('link')}>Link de aprovação</Button>}
           {d?.q.status === 'sent' && can('quotes.approve_onsite') && <Button onClick={() => setModal('decide')}>Cliente respondeu</Button>}
           {d && ['approved', 'partially_approved'].includes(d.q.status) && !d.q.order_id && can('orders.create') && <Button onClick={async () => { try { const oid = await rpc<string>('convert_quote_to_order', { p_quote: d.q.id }); nav(`/os/${oid}`) } catch (e) { toast.error(e) } }}>Aprovado? Abrir serviço</Button>}
-          {d && <Button variant="secondary" onClick={() => window.print()}><Printer className="size-4" />PDF / imprimir</Button>}
+          {d && <Button variant="secondary" onClick={() => quotePdf(d, wsId).catch((e) => toast.error(e))}><FileDown className="size-4" />PDF</Button>}
         </div>} />
       {locked && editable && <p className="no-print mb-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">Esta versão já foi enviada e está travada. Alterar itens ou preços cria uma <strong>nova versão</strong>; a atual deixa de poder ser aprovada e o link anterior é revogado.</p>}
       {d?.decision && <p className="mb-3 rounded-md bg-slate-100 p-3 text-sm">Decisão: <strong>{quoteStatus[d.decision.decision][0]}</strong> por {d.decision.decided_by_name} via {d.decision.channel}{d.decision.recorded_by && ' (registrado pela oficina)'} em {fmtDateTime(d.decision.created_at, tz)} — total aprovado {brl(d.decision.total_approved_cents)}. {d.decision.evidence?.code_verified && 'Código de verificação conferido.'}</p>}
@@ -147,7 +150,13 @@ export function QuoteEditor() {
         <p className="text-sm">Cliente: {d?.q.clients?.name} · Veículo: {fmtPlate(d?.q.vehicles?.plate)} {d?.q.vehicles?.brand} {d?.q.vehicles?.model} · Validade: {fmtDate(meta.valid_until)}</p>
       </div>
 
-      {!id && <Card title="Cliente e veículo" className="mb-4 no-print">{orderId ? (order.isLoading ? <Loading /> : <p className="text-sm">{order.data?.client.name} · {order.data?.vehicle?.model}</p>) : <ClientVehiclePicker value={picked} onChange={(p) => { setPicked(p); setDirty(true) }} />}</Card>}
+      {!id && <Card title="Cliente e veículo" className="mb-4 no-print">{orderId ? (order.isLoading ? <Loading /> : <p className="text-sm">{order.data?.client.name} · {order.data?.vehicle?.model}</p>) : <button onClick={() => setSheet(true)} className="flex w-full items-center gap-3 rounded-2xl border-2 border-brand bg-card p-3 text-left">
+            <span className="flex size-11 items-center justify-center rounded-xl bg-brand-soft text-brand"><User className="size-5" /></span>
+            {picked ? <span className="min-w-0 flex-1"><span className="block truncate font-semibold uppercase">{picked.clientName}</span><span className="text-sm text-slate-500">{picked.vehicleLabel}</span></span>
+              : <span className="flex-1"><span className="block font-bold text-brand-strong">Escolher cliente e carro</span><span className="text-sm text-slate-500">Busque pelo nome ou placa</span></span>}
+            <ChevronRight className="size-5 text-slate-400" />
+          </button>}</Card>}
+      <ClientSheet open={sheet} onClose={() => setSheet(false)} onPick={(v) => { setPicked({ clientId: v.clientId, clientName: v.clientName, vehicleId: v.vehicleId, vehicleLabel: [v.plate, v.label].filter(Boolean).join(' ') }); setDirty(true); setSheet(false) }} />
 
       <Card title="Itens" actions={editable && <Button size="sm" variant="secondary" className="no-print" onClick={() => { setDirty(true); setLines((s) => [...s, newLine()]) }}><Plus className="size-4" />Linha</Button>}>
         <div className="space-y-3">
@@ -166,7 +175,8 @@ export function QuoteEditor() {
                 <div className="sm:col-span-2"><MoneyInput label="Desconto" cents={l.discount_cents} disabled={!editable} onCents={(c) => upd(l.key, { discount_cents: c })} /></div>
                 <div className="flex items-end justify-between sm:col-span-1"><span className="pb-2 text-sm font-semibold">{brl(total)}</span>
                   {editable && <button className="no-print pb-2 text-slate-400 hover:text-red-600" aria-label="Remover linha" onClick={() => { setDirty(true); setLines((s) => s.filter((x) => x.key !== l.key)) }}><Trash2 className="size-4" /></button>}</div>
-                <div className="no-print grid gap-2 sm:col-span-12 sm:grid-cols-3">
+                <details className="no-print sm:col-span-12"><summary className="cursor-pointer text-sm text-slate-500">Mais opções</summary>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
                   <Input label="Conjunto (aprovar junto)" value={l.group_key} disabled={!editable} onChange={(e) => upd(l.key, { group_key: e.target.value })} hint="Itens com o mesmo nome de conjunto só podem ser aprovados juntos (ex.: peça + mão de obra)." />
                   <Select label="Prioridade (definida pelo mecânico)" value={l.priority} disabled={!editable} onChange={(e) => upd(l.key, { priority: e.target.value })}>
                     <option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option><option value="critica">Crítica (comunicar pessoalmente)</option>
@@ -174,7 +184,7 @@ export function QuoteEditor() {
                   {l.kind === 'service' && <Select label="Componente preventivo" value={l.maintenance_component} disabled={!editable} onChange={(e) => upd(l.key, { maintenance_component: e.target.value })}>
                     <option value="">Nenhum</option>{COMPONENTS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                   </Select>}
-                </div>
+                </div></details>
               </div>
             )
           })}
@@ -235,4 +245,19 @@ function DecideModal({ open, onClose, quoteId, items, onDone }: { open: boolean;
       </div>
     </Modal>
   )
+}
+
+/** PDF A4 do orçamento com logo e QR Code Pix (sem custos). */
+async function quotePdf(d: any, wsId: string) {
+  const [workshop, { buildPdf, sharePdf }] = await Promise.all([loadWorkshopDoc(wsId), import('@/lib/pdf')])
+  const blob = await buildPdf({
+    kind: 'ORÇAMENTO', number: d.cur?.version_no > 1 ? `${d.q.number} (v${d.cur.version_no})` : d.q.number, date: d.cur?.created_at ?? d.q.created_at, workshop,
+    client: { name: d.q.clients?.name ?? '', phone: d.q.clients?.whatsapp_norm },
+    vehicle: { plate: d.q.vehicles?.plate ?? d.q.vehicles?.internal_code, label: [d.q.vehicles?.brand, d.q.vehicles?.model, d.q.vehicles?.year_model].filter(Boolean).join(' ') },
+    items: d.items.map((i: any) => ({ description: i.description, quantity: Number(i.quantity), unit_cents: Number(i.unit_price_cents), discount_cents: Number(i.discount_cents), total_cents: Number(i.total_cents) })),
+    total_cents: Number(d.cur?.total_cents ?? 0), discount_cents: Number(d.cur?.discount_cents ?? 0),
+    notes: [d.cur?.estimated_days && `Prazo estimado: ${d.cur.estimated_days} dia(s).`, d.cur?.payment_terms && `Pagamento: ${d.cur.payment_terms}`, d.cur?.conditions, d.cur?.notes_client],
+    validity: d.cur?.valid_until, pix: true,
+  })
+  await sharePdf(blob, `Orcamento-${d.q.number}.pdf`, `Orçamento ${d.q.number}`)
 }

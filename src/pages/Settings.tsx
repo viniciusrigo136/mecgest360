@@ -17,15 +17,13 @@ export function SettingsPage() {
     <div>
       <PageHeader title="Configurações" />
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'oficina', label: 'Sua oficina' }, { key: 'catalogo', label: 'Serviços e preços' },
-        { key: 'mensagens', label: 'Mensagens' }, { key: 'horarios', label: 'Horários' }, { key: 'checklists', label: 'Checklists' },
-        ...(can('integrations.manage') ? [{ key: 'integracoes', label: 'Integrações' }] : []), ...(can('audit.view') ? [{ key: 'auditoria', label: 'Auditoria' }] : [])]} />
+        { key: 'mensagens', label: 'Mensagens' }, { key: 'horarios', label: 'Horários' },
+        ...(can('integrations.manage') ? [{ key: 'integracoes', label: 'Integrações' }] : [])]} />
       {tab === 'oficina' && <WorkshopForm />}
       {tab === 'horarios' && <Hours />}
       {tab === 'catalogo' && <Catalog />}
-      {tab === 'checklists' && <Checklists />}
       {tab === 'mensagens' && <Messages />}
       {tab === 'integracoes' && <Integrations />}
-      {tab === 'auditoria' && <Audit />}
     </div>
   )
 }
@@ -47,7 +45,7 @@ function WorkshopForm() {
   async function save() {
     const { data, error } = await supabase.from('workshops').update({ name: f.name, legal_name: f.legal_name || null, document: f.document || null, phone: f.phone || null, whatsapp: f.whatsapp || null,
       email: f.email || null, primary_color: f.primary_color, timezone: f.timezone, commercial_terms: f.commercial_terms || null, warranty_terms: f.warranty_terms || null,
-      max_discount_pct: Number(f.max_discount_pct), payment_methods: f.payment_methods, address: { street: f.street, city: f.city, state: f.state, zip: f.zip } }).eq('id', wsId).eq('version', w.data.version).select('id')
+      max_discount_pct: Number(f.max_discount_pct), payment_methods: f.payment_methods, pix_key: f.pix_key || null, pix_name: f.pix_name || null, pix_city: f.pix_city || null, address: { street: f.street, city: f.city, state: f.state, zip: f.zip } }).eq('id', wsId).eq('version', w.data.version).select('id')
     if (error) return toast.error(error)
     if (!data?.length) return toast.error({ code: '40001' })
     toast.success('Configurações salvas'); qc.invalidateQueries({ queryKey: ['workshop'] }); refresh()
@@ -70,6 +68,11 @@ function WorkshopForm() {
         <Input label="UF" value={f.state ?? ''} onChange={set('state')} /><Input label="CEP" value={f.zip ?? ''} onChange={set('zip')} />
         <Select label="Fuso horário" value={f.timezone} onChange={set('timezone')}>{['America/Sao_Paulo', 'America/Manaus', 'America/Cuiaba', 'America/Belem', 'America/Fortaleza', 'America/Recife', 'America/Rio_Branco', 'America/Noronha'].map((t) => <option key={t}>{t}</option>)}</Select>
         <Input label="Cor principal" type="color" value={f.primary_color} onChange={set('primary_color')} />
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 sm:col-span-3"><p className="mb-2 font-semibold">Pix da oficina</p>
+          <p className="mb-3 text-sm text-slate-600">Aparece como QR Code no orçamento em PDF, na entrega e na página do cliente. O pagamento não é confirmado automaticamente: confira no banco.</p>
+          <div className="grid gap-3 sm:grid-cols-3"><Input label="Chave Pix" value={f.pix_key ?? ''} onChange={set('pix_key')} placeholder="CPF, CNPJ, e-mail, celular ou aleatória" />
+          <Input label="Nome de quem recebe" value={f.pix_name ?? ''} onChange={set('pix_name')} />
+          <Input label="Cidade" value={f.pix_city ?? ''} onChange={set('pix_city')} /></div></div>
         <Input label="Desconto máximo sem autorização (%)" inputMode="decimal" value={String(f.max_discount_pct)} onChange={set('max_discount_pct')} />
         <div><p className="label">Logo</p><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => uploadLogo(e.target.files?.[0])} className="text-sm" />{f.logo_path && <p className="text-xs text-slate-500">Logo cadastrado</p>}</div>
         <div className="sm:col-span-3"><p className="label">Meios de pagamento aceitos</p><div className="flex flex-wrap gap-3">{methods.map((m) => (
@@ -88,7 +91,6 @@ function Hours() {
   const qc = useQueryClient()
   const w = useWorkshop()
   const [hours, setHours] = useState<Record<string, string[][]>>({})
-  const resources = useQuery({ queryKey: ['resources-all', wsId], queryFn: async () => (await supabase.from('resources').select('*').eq('workshop_id', wsId).order('name')).data ?? [] })
   const blocks = useQuery({ queryKey: ['blocks', wsId], queryFn: async () => (await supabase.from('schedule_blocks').select('*').eq('workshop_id', wsId).gte('ends_at', new Date().toISOString()).order('starts_at')).data ?? [] })
   const [blk, setBlk] = useState({ start: '', end: '', reason: '' })
   useEffect(() => { if (w.data) setHours(w.data.business_hours) }, [w.data])
@@ -111,10 +113,6 @@ function Hours() {
             </div>
           )
         })}
-      </Card>
-      <Card title="Boxes e recursos" actions={<Button size="sm" onClick={async () => { const n = prompt('Nome do box/recurso:'); if (n) { await supabase.from('resources').insert({ workshop_id: wsId, name: n }); qc.invalidateQueries({ queryKey: ['resources-all'] }) } }}><Plus className="size-4" />Box</Button>}>
-        <ul className="text-sm">{resources.data?.map((r: any) => <li key={r.id} className="flex items-center gap-2 py-1">{r.name} {!r.active && <Badge>inativo</Badge>}
-          <Button size="sm" variant="ghost" onClick={async () => { await supabase.from('resources').update({ active: !r.active }).eq('id', r.id); qc.invalidateQueries({ queryKey: ['resources-all'] }) }}>{r.active ? 'Desativar' : 'Ativar'}</Button></li>)}</ul>
       </Card>
       <Card title="Feriados e bloqueios">
         <div className="mb-3 grid gap-2 sm:grid-cols-4"><Input label="Início" type="datetime-local" value={blk.start} onChange={(e) => setBlk((s) => ({ ...s, start: e.target.value }))} /><Input label="Fim" type="datetime-local" value={blk.end} onChange={(e) => setBlk((s) => ({ ...s, end: e.target.value }))} />
@@ -162,23 +160,6 @@ function Catalog() {
       </Modal>
     </Card>
   )
-}
-
-function Checklists() {
-  const { wsId } = useAuth()
-  const toast = useToast()
-  const qc = useQueryClient()
-  const list = useQuery({ queryKey: ['checklist-templates', wsId], queryFn: async () => (await supabase.from('checklist_templates').select('*').eq('workshop_id', wsId).eq('active', true)).data ?? [] })
-  async function save(t: any, text: string) {
-    const items = text.split('\n').map((l) => l.trim()).filter(Boolean).map((label, i) => ({ key: `i${i}_${label.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '_').slice(0, 30)}`, label }))
-    const { error } = await supabase.from('checklist_templates').update({ items }).eq('id', t.id)
-    if (error) toast.error(error); else { toast.success('Modelo salvo (vale para novas OS)'); qc.invalidateQueries({ queryKey: ['checklist-templates'] }) }
-  }
-  return <div className="space-y-4">{list.data?.map((t: any) => <ChecklistEditor key={t.id} t={t} onSave={(txt) => save(t, txt)} />)}</div>
-}
-function ChecklistEditor({ t, onSave }: { t: any; onSave: (text: string) => void }) {
-  const [text, setText] = useState(t.items.map((i: any) => i.label).join('\n'))
-  return <Card title={t.kind === 'entry' ? 'Checklist de entrada' : 'Controle de qualidade'} actions={<Button size="sm" onClick={() => onSave(text)}>Salvar</Button>}><Textarea label="Um item por linha" rows={8} value={text} onChange={(e) => setText(e.target.value)} /></Card>
 }
 
 function Messages() {
@@ -263,24 +244,3 @@ function Integrations() {
   )
 }
 
-function Audit() {
-  const { wsId, tz } = useAuth()
-  const [resource, setResource] = useState('')
-  const q = useQuery({ queryKey: ['audit', wsId, resource], queryFn: async () => {
-    let s = supabase.from('audit_log').select('*').eq('workshop_id', wsId).order('created_at', { ascending: false }).limit(200)
-    if (resource) s = s.eq('resource', resource)
-    const { data, error } = await s
-    if (error) throw error
-    return data ?? []
-  } })
-  const team = useQuery({ queryKey: ['audit-team', wsId], queryFn: async () => (await supabase.from('memberships').select('user_id, profiles(full_name, email)').eq('workshop_id', wsId)).data ?? [] })
-  const who = (id: string) => { const m: any = team.data?.find((x: any) => x.user_id === id); return m?.profiles?.full_name || m?.profiles?.email || (id ? 'usuário' : 'sistema/cliente') }
-  return (
-    <Card title="Auditoria" actions={<select className="input h-8 w-48 py-0" value={resource} onChange={(e) => setResource(e.target.value)} aria-label="Recurso"><option value="">Todos os recursos</option>{['memberships', 'member_permission_overrides', 'invites', 'service_orders', 'order_items', 'clients', 'vehicles', 'accounts', 'account_payments', 'maintenance_plans', 'export'].map((r) => <option key={r}>{r}</option>)}</select>}>
-      {q.isLoading ? <Loading /> : <ul className="divide-y divide-slate-100 text-sm">{q.data?.map((a: any) => (
-        <li key={a.id} className="py-2"><span className="text-slate-500">{fmtDateTime(a.created_at, tz)}</span> · <strong>{who(a.actor_id)}</strong> · {a.action} · {a.resource}
-          <details className="text-xs text-slate-500"><summary className="cursor-pointer">alterações</summary><pre className="overflow-x-auto whitespace-pre-wrap">{JSON.stringify(a.changes, null, 1)}</pre></details></li>
-      ))}</ul>}
-    </Card>
-  )
-}

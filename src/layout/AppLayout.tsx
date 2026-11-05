@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import {
-  BarChart3, BellRing, Boxes, Calendar, Car, CarFront, ClipboardList, FileText, Home, LogOut, Menu, MessageCircle, Moon, Plus, Search,
-  Settings, ShoppingCart, Sun, UserPlus, Users, UsersRound, Wallet, Wrench, X, type LucideIcon,
+  BarChart3, BellRing, Boxes, Calendar, Car, CarFront, FileText, Home, LogOut, Menu, MessageCircle, Moon, Plus, Search,
+  Settings, Sun, UserPlus, Users, UsersRound, Wallet, Wrench, X, type LucideIcon,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
@@ -31,9 +31,7 @@ const GROUPS: { title?: string; items: Item[] }[] = [
   { title: 'Gestão', items: [
     { to: '/financeiro', label: 'Financeiro', icon: Wallet, perm: ['finance.view', 'cash.operate'] },
     { to: '/estoque', label: 'Estoque', icon: Boxes, perm: 'inventory.view' },
-    { to: '/compras', label: 'Compras', icon: ShoppingCart, perm: 'purchasing.view' },
     { to: '/indicadores', label: 'Indicadores', icon: BarChart3, perm: 'reports.view' },
-    { to: '/relatorios', label: 'Relatórios', icon: ClipboardList, perm: 'reports.view' },
   ] },
   { title: 'Oficina', items: [
     { to: '/funcionarios', label: 'Funcionários', icon: UsersRound, perm: 'team.view' },

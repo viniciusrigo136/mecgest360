@@ -79,3 +79,25 @@ describe('mensagens de erro', () => {
     expect(errorMessage(new Error('Failed to fetch'))).toMatch(/Sem conexão/)
   })
 })
+
+import { crc16, normalizePixKey, pixPayload } from './pix'
+
+describe('Pix copia e cola', () => {
+  it('CRC16/CCITT-FALSE confere com o valor de referência', () => {
+    expect(crc16('123456789')).toBe('29B1')
+  })
+  it('monta o BR Code com valor, nome sem acento e CRC válido no final', () => {
+    const p = pixPayload({ key: 'oficina@pix.com', name: 'Mecânica São João', city: 'Chapecó', amountCents: 12345 })
+    expect(p.startsWith('000201')).toBe(true)
+    expect(p).toContain('0014br.gov.bcb.pix0115oficina@pix.com')
+    expect(p).toContain('5406123.45')
+    expect(p).toContain('5917MECANICA SAO JOAO')
+    expect(p).toContain('6007CHAPECO')
+    expect(p.slice(-8, -4)).toBe('6304')
+    expect(crc16(p.slice(0, -4))).toBe(p.slice(-4))
+  })
+  it('normaliza chave de celular e CPF', () => {
+    expect(normalizePixKey('(49) 99941-6011')).toBe('+5549999416011')
+    expect(normalizePixKey('123.456.789-09')).toBe('12345678909')
+  })
+})

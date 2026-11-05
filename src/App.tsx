@@ -14,14 +14,11 @@ import { InventoryPage } from '@/pages/Inventory'
 import { MaintenancePage } from '@/pages/Maintenance'
 import { NewOrder, OrderDetail, OrdersPage } from '@/pages/Orders'
 import { PortalPage } from '@/pages/Portal'
-import { PurchasingPage } from '@/pages/Purchasing'
 import { QuoteEditor, QuotesPage } from '@/pages/Quotes'
 import { ReceivePage } from '@/pages/Receive'
-import { ReportsPage } from '@/pages/Reports'
 import { SchedulePage } from '@/pages/Schedule'
 import { SettingsPage } from '@/pages/Settings'
 import { StaffPage } from '@/pages/Staff'
-import { TeamPage } from '@/pages/Team'
 import { VehicleDetail, VehiclesPage } from '@/pages/Vehicles'
 
 function Protected() {
@@ -67,12 +64,9 @@ const router = createBrowserRouter([
       { path: 'preventiva', element: <Guard perm="maintenance.view"><MaintenancePage /></Guard> },
       { path: 'contatos', element: <Guard perm="contacts.view"><ContactsPage /></Guard> },
       { path: 'estoque', element: <Guard perm="inventory.view"><InventoryPage /></Guard> },
-      { path: 'compras', element: <Guard perm="purchasing.view"><PurchasingPage /></Guard> },
       { path: 'financeiro', element: <Guard perm={['finance.view', 'cash.operate']}><FinancePage /></Guard> },
       { path: 'indicadores', element: <Guard perm="reports.view"><IndicatorsPage /></Guard> },
-      { path: 'relatorios', element: <Guard perm="reports.view"><ReportsPage /></Guard> },
       { path: 'funcionarios', element: <Guard perm="team.view"><StaffPage /></Guard> },
-      { path: 'equipe', element: <Guard perm="team.view"><TeamPage /></Guard> },
       { path: 'configuracoes', element: <Guard perm="settings.manage"><SettingsPage /></Guard> },
       { path: '*', element: <div className="p-8 text-slate-500">Página não encontrada.</div> },
     ],

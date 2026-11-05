@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { CheckCircle2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { PixBox } from '@/components/PixBox'
 import { Badge, Button, Checkbox, ErrorBox, Input, Loading, StatusBadge, Textarea } from '@/components/ui'
 import { errorMessage } from '@/lib/errors'
 import { brl, fmtDate, fmtDateTime, fmtKm, fmtQty } from '@/lib/format'
@@ -29,6 +30,8 @@ export function PortalPage() {
       <p className="text-sm text-slate-600">Olá{d.client_first_name ? `, ${d.client_first_name}` : ''}! Veículo: <strong>{d.vehicle.brand} {d.vehicle.model} {d.vehicle.year ?? ''}</strong> {d.vehicle.plate_masked && <span className="text-slate-500">({d.vehicle.plate_masked})</span>}</p>
       {d.order && <OrderView o={d.order} token={token} />}
       {d.quote && <QuoteView qd={d.quote} token={token} purpose={d.purpose} onDone={() => q.refetch()} />}
+      <PortalPix token={token} />
+      <History token={token} />
       {d.next_care?.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold">Próximos cuidados</h2>
         <ul className="text-sm">{d.next_care.map((c: any, i: number) => <li key={i}>{c.component}: {c.target_date && `a partir de ${fmtDate(c.target_date)}`} {c.target_km && `ou ${fmtKm(c.target_km)}`}</li>)}</ul>
         <p className="mt-1 text-xs text-slate-500">Datas e quilometragens são referências cadastradas pela oficina; confirme com ela.</p></section>}
@@ -159,6 +162,30 @@ function Requests({ token }: { token: string }) {
         {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
         <div className="flex gap-2"><Button size="sm" onClick={send} disabled={kind === 'km' && !km}>Enviar</Button><Button size="sm" variant="ghost" onClick={() => setKind(null)}>Cancelar</Button></div>
       </div>}
+    </section>
+  )
+}
+
+/** Pix da oficina com o valor em aberto (o pagamento é conferido pela oficina). */
+function PortalPix({ token }: { token: string }) {
+  const q = useQuery({ queryKey: ['portal-pix', token], retry: false, queryFn: () => rpc<any>('portal_pix', { p_token: token }) })
+  if (!q.data || !Number(q.data.amount_cents)) return null
+  return <section><PixBox pix={q.data} /><p className="mt-1 text-center text-xs text-slate-500">Depois de pagar, mande o comprovante para a oficina.</p></section>
+}
+
+/** Tudo o que já foi feito neste carro, para este cliente. */
+function History({ token }: { token: string }) {
+  const q = useQuery({ queryKey: ['portal-history', token], retry: false, queryFn: () => rpc<any[]>('portal_history', { p_token: token }) })
+  if (!q.data?.length) return null
+  return (
+    <section className="card p-4">
+      <h2 className="mb-2 font-semibold">Histórico do seu carro</h2>
+      <ol className="space-y-3 border-l-2 border-brand-soft pl-4">{q.data.map((h) => (
+        <li key={h.number}>
+          <p className="text-sm font-semibold">{fmtDate(h.date)}{h.km ? ` · ${Number(h.km).toLocaleString('pt-BR')} km` : ''}</p>
+          <p className="text-sm text-slate-600">{h.items.join(', ') || 'Serviço realizado'}</p>
+        </li>
+      ))}</ol>
     </section>
   )
 }
