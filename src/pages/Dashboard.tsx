@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CalendarPlus, CarFront, ChevronRight, Clock, FileText, PackageX, Timer } from 'lucide-react'
 import { Link } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
+import { DaySummary } from '@/components/DaySummary'
+import { Plate } from '@/components/Plate'
 import { ErrorBox, Loading, StatusBadge } from '@/components/ui'
 import { brl, fmtDateTime, fmtPlate } from '@/lib/format'
 import { orderStatus, techStatus } from '@/lib/labels'
@@ -34,6 +36,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-5">
+      <DaySummary />
       <div>
         <p className="text-sm text-slate-500">{ws?.name}</p>
         <h1 className="font-heading text-2xl font-extrabold">{greeting()}{name ? `, ${name}` : ''}!</h1>
@@ -106,7 +109,7 @@ export function CarCard({ o, tz }: { o: any; tz: string }) {
   return (
     <Link to={`/os/${o.id}`} className="card flex items-center gap-3 p-3 active:bg-slate-50">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2"><span className="plate text-lg leading-none">{fmtPlate(o.plate)}</span><span className="text-xs text-slate-400">{o.number}</span></div>
+        <div className="flex items-center gap-2"><Plate value={o.plate} /><span className="text-xs text-slate-400">{o.number}</span></div>
         <p className="truncate text-sm text-slate-700">{o.vehicle_label} · {o.client_name}</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <StatusBadge map={orderStatus} value={o.status} />

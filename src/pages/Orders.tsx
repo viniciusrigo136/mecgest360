@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Camera, Link2, MessageCircle, Pause, Play, Plus, Printer } from 'lucide-react'
+import { Camera, CheckCircle2, ChevronDown, ChevronLeft, Link2, MessageCircle, Pause, Play, Plus, Printer } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
@@ -9,10 +9,11 @@ import {
   Badge, Button, Card, Checkbox, ErrorBox, Input, Loading, Modal, MoneyInput, PageHeader, Pager, Select, StatusBadge, Tabs, Textarea, useToast, useUnsavedWarning,
 } from '@/components/ui'
 import { isConflict } from '@/lib/errors'
-import { brl, fmtDate, fmtDateTime, fmtKm, fmtPlate, fmtQty, localToISO } from '@/lib/format'
+import { brl, fmtDate, fmtDateTime, fmtKm, fmtQty, localToISO, todayLocal } from '@/lib/format'
 import { COMPONENTS, fuelLabels, itemStatus, kindLabel, orderStatus, quoteStatus } from '@/lib/labels'
 import { rpc, supabase } from '@/lib/supabase'
 import { portalUrl, waLink } from '@/lib/whatsapp'
+import { Plate } from '@/components/Plate'
 import { CarCard } from './Dashboard'
 import { MaintenancePlanModal } from './Maintenance'
 
@@ -142,74 +143,96 @@ export function OrderDetail() {
   if (q.isLoading) return <Loading />
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />
   const closed = ['delivered', 'cancelled'].includes(o.status)
-  const nextSteps: Record<string, { to: string; label: string; perm: string }[]> = {
-    open: [{ to: 'diagnosis', label: 'Iniciar diagnóstico', perm: 'orders.execute' }],
-    diagnosis: [{ to: 'approved', label: 'Aprovar internamente', perm: 'orders.edit' }],
-    awaiting_approval: [{ to: 'diagnosis', label: 'Voltar ao diagnóstico', perm: 'orders.edit' }],
-    approved: [{ to: 'in_progress', label: 'Iniciar execução', perm: 'orders.execute' }],
-    in_progress: [{ to: 'quality_check', label: 'Enviar para qualidade', perm: 'orders.execute' }, { to: 'approved', label: 'Pausar execução', perm: 'orders.execute' }],
-    quality_check: [{ to: 'ready', label: 'Liberar: veículo pronto', perm: 'orders.execute' }, { to: 'in_progress', label: 'Voltar à execução', perm: 'orders.execute' }],
-    ready: [{ to: 'in_progress', label: 'Voltar à execução', perm: 'orders.execute' }],
-  }
+  const approvedItems = o.items.filter((i: any) => ['approved', 'in_progress', 'done'].includes(i.status))
+  const before = ['open', 'diagnosis', 'awaiting_approval', 'approved'].includes(o.status)
   const waText = `Olá, ${o.client?.name?.split(' ')[0] ?? ''}! Atualização do seu ${o.vehicle?.model ?? 'veículo'} na ${ws?.name}: ${orderStatus[o.status][0]}.`
   const wa = o.client?.whatsapp_norm && waLink(o.client.whatsapp_norm, waText)
+  const canAdd = can('orders.edit') && can('prices.view')
 
   return (
-    <div>
-      {/* Cabeçalho do carro (padrão ChapGest): placa em destaque, etapa e próxima ação */}
-      <section className="card mb-4 p-4">
+    <div className="mx-auto max-w-3xl space-y-3">
+      <div className="no-print flex items-center gap-2">
+        <button onClick={() => nav(-1)} aria-label="Voltar" className="flex size-10 items-center justify-center rounded-full text-slate-600 active:bg-slate-100"><ChevronLeft className="size-6" /></button>
+        <span className="text-sm text-slate-500">Serviço {o.number}</span>
+      </div>
+
+      {/* Carro, etapa e a próxima ação (um botão por vez) */}
+      <section className="card p-4">
         <div className="flex flex-wrap items-start gap-3">
+          <Plate value={o.vehicle?.plate ?? o.vehicle?.internal_code} size="lg" />
           <div className="min-w-0 flex-1">
-            <p className="plate text-3xl leading-none">{fmtPlate(o.vehicle?.plate ?? o.vehicle?.internal_code)}</p>
-            <p className="mt-1 text-sm text-slate-700">{o.vehicle?.brand} {o.vehicle?.model} {o.vehicle?.year_model ?? ''} · {can('clients.view') ? <Link className="font-medium text-brand" to={`/clientes/${o.client.id}`}>{o.client.name}</Link> : o.client.name}</p>
-            <p className="text-xs text-slate-500">{o.number} · entrou {fmtDateTime(o.entry_at, tz)} · {fmtKm(o.km_entry)}{o.expected_delivery_at && ` · entrega ${fmtDateTime(o.expected_delivery_at, tz)}`}</p>
+            <p className="font-semibold uppercase">{can('clients.view') ? <Link className="text-ink" to={`/clientes/${o.client.id}`}>{o.client.name}</Link> : o.client.name}</p>
+            <p className="text-sm text-slate-600">{[o.vehicle?.brand, o.vehicle?.model, o.vehicle?.year_model].filter(Boolean).join(' ')}{o.km_entry ? ` · ${fmtKm(o.km_entry)}` : ''}</p>
+            <p className="text-xs text-slate-500">Chegou {fmtDateTime(o.entry_at, tz)}{o.expected_delivery_at && ` · entrega ${fmtDateTime(o.expected_delivery_at, tz)}`}</p>
           </div>
-          <div className="flex flex-wrap gap-1.5"><StatusBadge map={orderStatus} value={o.status} />{o.parts_pending && <Badge tone="amber">Esperando peça</Badge>}{o.warranty_of_order_id && <Badge tone="violet">Garantia</Badge>}</div>
         </div>
-        {o.status !== 'cancelled' && <StageBar status={o.status} />}
-        <div className="no-print mt-3 grid gap-2 sm:flex sm:flex-wrap">
-          {(nextSteps[o.status] ?? []).filter((s) => can(s.perm)).map((s, i) => (
-            <Button key={s.to} size="lg" variant={i === 0 ? 'primary' : 'secondary'} className="w-full sm:w-auto" onClick={() => transition(s.to)}>{s.label}</Button>
-          ))}
-          {o.status === 'ready' && can('orders.deliver') && <Button size="lg" className="w-full sm:w-auto" onClick={() => setModal('deliver')}>Entregar o carro</Button>}
+        {o.complaint && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm"><b>Pedido:</b> {o.complaint}</p>}
+        {o.status === 'cancelled' ? <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">Cancelado: {o.cancel_reason}</p> : <StageBar status={o.status} />}
+        <div className="no-print mt-3 grid gap-2">
+          {before && approvedItems.length === 0 && canAdd && <Button size="lg" onClick={() => setModal('simple-item')}><Plus className="size-5" />Adicionar serviço</Button>}
+          {before && approvedItems.length > 0 && can('orders.execute') && <Button size="lg" onClick={() => transition('in_progress')}>Começar serviço</Button>}
+          {before && can('quotes.create') && <Button size="lg" variant="secondary" onClick={() => nav(`/orcamentos/novo?order=${id}`)}>Fazer orçamento para o cliente aprovar</Button>}
+          {['in_progress', 'quality_check'].includes(o.status) && can('orders.execute') && <Button size="lg" onClick={() => setModal('finish')}><CheckCircle2 className="size-5" />Pronto para entrega</Button>}
+          {o.status === 'ready' && can('orders.deliver') && <Button size="lg" onClick={() => setModal('deliver-simple')}>Entregar o carro</Button>}
+        </div>
+        <div className="no-print mt-2 flex flex-wrap gap-2">
+          {wa && can('messages.send') && <a className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-wa px-3 text-sm font-medium text-white" target="_blank" rel="noopener noreferrer" href={wa}
+            onClick={() => rpc('log_contact', { p_workshop: wsId, p_client: o.client.id, p_channel: 'whatsapp', p_kind: 'conversation_opened', p_message: waText, p_outcome: null, p_order: id }).catch(() => {})}><MessageCircle className="size-4" />WhatsApp</a>}
+          {(can('messages.send') || can('orders.edit')) && <Button variant="secondary" onClick={() => setModal('portal')}><Link2 className="size-4" />Link do cliente</Button>}
+          {can('orders.print') && <Button variant="secondary" onClick={() => window.print()}><Printer className="size-4" />Imprimir</Button>}
         </div>
       </section>
-      {!closed && (can('orders.edit') || can('orders.execute')) && <ClientMessage o={o} reload={reload} />}
-      <PageHeader title="" actions={<div className="no-print -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-          {can('quotes.create') && !closed && <Button variant="secondary" onClick={() => nav(`/orcamentos/novo?order=${id}`)}>{['approved', 'in_progress', 'quality_check'].includes(o.status) ? 'Aditivo (orçamento)' : 'Orçamento'}</Button>}
-          {(can('messages.send') || can('orders.edit')) && <Button variant="secondary" onClick={() => setModal('portal')}><Link2 className="size-4" />Link do cliente</Button>}
-          {wa && can('messages.send') && <a className="inline-flex h-10 items-center gap-1.5 rounded-md border border-slate-300 bg-card px-3 text-sm" target="_blank" rel="noopener noreferrer" href={wa}
-            onClick={() => rpc('log_contact', { p_workshop: wsId, p_client: o.client.id, p_channel: 'whatsapp', p_kind: 'conversation_opened', p_message: waText, p_outcome: null, p_order: id }).catch(() => {})}><MessageCircle className="size-4" />WhatsApp</a>}
-          {can('orders.print') && <Button variant="secondary" onClick={() => window.print()}><Printer className="size-4" />Imprimir</Button>}
-          {['ready', 'delivered'].includes(o.status) && can('orders.reopen') && <Button variant="ghost" onClick={() => { const r = prompt('Justificativa da reabertura:'); if (r) act(() => rpc('reopen_order', { p_order: id, p_reason: r }), 'OS reaberta') }}>Reabrir</Button>}
-          {o.status === 'delivered' && can('orders.create') && <Link className="inline-flex h-10 items-center rounded-md px-3 text-sm text-slate-700 hover:bg-slate-100" to={`/os/nova?client=${o.client.id}&vehicle=${o.vehicle_id}&garantia=${id}`}>Retorno em garantia</Link>}
-          {!closed && can('orders.cancel') && <Button variant="ghost" onClick={() => { const r = prompt('Motivo do cancelamento:'); if (r) act(() => rpc('cancel_order', { p_order: id, p_reason: r }), 'OS cancelada') }}>Cancelar OS</Button>}
-        </div>} />
 
-      {o.status === 'cancelled' && <p className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-800">Cancelada: {o.cancel_reason}</p>}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Tabs value={tab} onChange={setTab} tabs={[{ key: 'itens', label: 'Serviços e peças' }, { key: 'diag', label: 'Diagnóstico' }, { key: 'check', label: 'Checklists' },
-            { key: 'fotos', label: `Fotos (${o.attachments.length})` }, { key: 'tempo', label: 'Tempo' }, { key: 'linha', label: 'Linha do tempo' }]} />
+      {!closed && (can('orders.edit') || can('orders.execute')) && <ClientMessage o={o} reload={reload} />}
+
+      <section className="card p-4">
+        <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-bold">Serviços e peças</h2>
+          {canAdd && !closed && o.status !== 'ready' && <Button size="sm" variant="secondary" onClick={() => setModal('simple-item')}><Plus className="size-4" />Adicionar</Button>}</div>
+        {o.items.filter((i: any) => i.status !== 'cancelled').length === 0 ? <p className="text-sm text-slate-500">Nenhum serviço ainda.</p> : (
+          <ul className="divide-y divide-slate-100">{o.items.filter((i: any) => i.status !== 'cancelled').map((i: any) => (
+            <li key={i.id} className="flex items-center gap-3 py-2.5">
+              <div className="min-w-0 flex-1"><p className="truncate font-medium">{i.description}</p>
+                <p className="text-xs text-slate-500">{kindLabel[i.kind]}{Number(i.quantity) !== 1 && ` · ${fmtQty(i.quantity)}x`}</p></div>
+              {o.perms.prices && <span className="font-semibold">{brl(i.total_cents)}</span>}
+              <StatusBadge map={itemStatus} value={i.status} />
+            </li>
+          ))}</ul>
+        )}
+        {o.totals && <p className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-heading text-lg font-extrabold"><span>Total</span><span>{brl(o.totals.approved_total_cents)}</span></p>}
+      </section>
+
+      <PhotosTab o={o} reload={reload} />
+
+      <details className="card group p-4">
+        <summary className="cursor-pointer list-none font-medium text-slate-600"><span className="inline-flex items-center gap-1">Mais detalhes <ChevronDown className="size-4 transition-transform group-open:rotate-180" /></span></summary>
+        <div className="mt-3 space-y-4">
+          <Tabs value={tab} onChange={setTab} tabs={[{ key: 'itens', label: 'Itens (avançado)' }, { key: 'diag', label: 'Diagnóstico' }, { key: 'check', label: 'Checklists' },
+            { key: 'tempo', label: 'Tempo' }, { key: 'linha', label: 'Histórico' }]} />
           {tab === 'itens' && <ItemsTab o={o} act={act} name={name} onAdd={() => setModal('item')} />}
           {tab === 'diag' && <DiagnosisTab o={o} reload={reload} />}
           {tab === 'check' && <ChecklistTab o={o} act={act} />}
-          {tab === 'fotos' && <PhotosTab o={o} reload={reload} />}
           {tab === 'tempo' && <TimeTab o={o} act={act} name={name} />}
           {tab === 'linha' && <TimelineTab o={o} reload={reload} />}
-        </div>
-        <div className="space-y-4">
           <SummaryCard o={o} name={name} reload={reload} onPlan={() => setModal('plan')} />
           {o.quotes && o.quotes.length > 0 && (
-            <Card title="Orçamentos desta OS">
+            <Card title="Orçamentos deste serviço">
               <ul className="space-y-1 text-sm">{o.quotes.map((qq: any) => <li key={qq.id} className="flex items-center gap-2"><Link className="text-brand" to={`/orcamentos/${qq.id}`}>{qq.number}</Link>{qq.is_addendum && <Badge tone="violet">aditivo</Badge>}<span className="ml-auto"><StatusBadge map={quoteStatus} value={qq.status} /></span></li>)}</ul>
             </Card>
           )}
           {(o.totals || o.margin) && <MoneyCard o={o} reload={reload} />}
+          <div className="no-print flex flex-wrap gap-2">
+            {['in_progress', 'quality_check'].includes(o.status) && can('orders.execute') && <Button variant="secondary" onClick={() => transition('approved')}>Pausar serviço</Button>}
+            {['ready', 'delivered'].includes(o.status) && can('orders.reopen') && <Button variant="ghost" onClick={() => { const r = prompt('Por que reabrir?'); if (r) act(() => rpc('reopen_order', { p_order: id, p_reason: r }), 'Serviço reaberto') }}>Reabrir</Button>}
+            {o.status === 'delivered' && can('orders.create') && <Link className="inline-flex h-10 items-center rounded-md px-3 text-sm text-slate-700 hover:bg-slate-100" to={`/os/nova?client=${o.client.id}&vehicle=${o.vehicle_id}&garantia=${id}`}>Retorno em garantia</Link>}
+            {!closed && can('orders.cancel') && <Button variant="ghost" className="text-red-600" onClick={() => { const r = prompt('Motivo do cancelamento:'); if (r) act(() => rpc('cancel_order', { p_order: id, p_reason: r }), 'Serviço cancelado') }}>Cancelar serviço</Button>}
+          </div>
         </div>
-      </div>
+      </details>
+
+      <SimpleItemModal open={modal === 'simple-item'} onClose={() => setModal(null)} o={o} reload={reload} />
+      <FinishModal open={modal === 'finish'} onClose={() => setModal(null)} o={o} reload={reload} />
+      <DeliverSimpleModal open={modal === 'deliver-simple'} onClose={() => setModal(null)} o={o} reload={reload} />
       <AddItemModal open={modal === 'item'} onClose={() => setModal(null)} o={o} reload={reload} />
-      <DeliverModal open={modal === 'deliver'} onClose={() => setModal(null)} o={o} reload={reload} />
       <PortalLinkModal open={modal === 'portal'} onClose={() => setModal(null)} orderId={id!} clientPhone={o.client?.whatsapp_norm} clientName={o.client?.name} clientId={o.client?.id} />
       <MaintenancePlanModal open={modal === 'plan'} onClose={() => { setModal(null); reload() }} vehicleId={o.vehicle_id} orderId={id}
         defaults={o.items.find((i: any) => i.maintenance_component && i.status !== 'cancelled')} baseKm={o.km_entry} />
@@ -217,15 +240,134 @@ export function OrderDetail() {
   )
 }
 
-const STAGES = ['open', 'diagnosis', 'awaiting_approval', 'approved', 'in_progress', 'quality_check', 'ready', 'delivered']
+/** Adicionar serviço/peça em poucos campos. */
+function SimpleItemModal({ open, onClose, o, reload }: { open: boolean; onClose: () => void; o: any; reload: () => void }) {
+  const { wsId, can } = useAuth()
+  const toast = useToast()
+  const [desc, setDesc] = useState('')
+  const [price, setPrice] = useState<number | null>(null)
+  const [qty, setQty] = useState('1')
+  const [kind, setKind] = useState<'service' | 'part'>('service')
+  const [approved, setApproved] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const canApprove = can('quotes.approve_onsite')
+  const services = useQuery({ queryKey: ['catalog', wsId], enabled: open, queryFn: async () => (await supabase.from('service_catalog').select('*').eq('workshop_id', wsId).is('archived_at', null).order('name')).data ?? [] })
+  useEffect(() => { if (open) { setDesc(''); setPrice(null); setQty('1'); setKind('service'); setApproved(canApprove) } }, [open, canApprove])
+  async function save() {
+    setBusy(true)
+    try {
+      const sv = services.data?.find((s) => s.name === desc)
+      await rpc('add_order_item', { p_order: o.id, p_kind: kind, p_description: desc.trim(), p_qty: Number(qty.replace(',', '.')) || 1, p_unit_price_cents: price ?? 0,
+        p_service: sv?.id ?? null, p_onsite_authorization: approved ? { channel: 'presencial', authorized_by: o.client?.name ?? 'Cliente' } : null })
+      toast.success('Adicionado'); reload(); onClose()
+    } catch (e) { toast.error(e) } finally { setBusy(false) }
+  }
+  return (
+    <Modal open={open} onClose={onClose} title="Adicionar serviço ou peça">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          {([['service', 'Serviço'], ['part', 'Peça']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setKind(v)} aria-pressed={kind === v} className={clsx('h-11 rounded-xl border font-medium', kind === v ? 'border-brand bg-brand-soft text-brand-strong' : 'border-slate-300')}>{l}</button>
+          ))}
+        </div>
+        <div>
+          <label htmlFor="si-desc" className="label">O que é?</label>
+          <input id="si-desc" className="input" list="si-cat" value={desc} autoFocus placeholder={kind === 'service' ? 'Ex.: Troca de óleo' : 'Ex.: Filtro de óleo'}
+            onChange={(e) => { setDesc(e.target.value); const sv = services.data?.find((s) => s.name === e.target.value); if (sv) setPrice(Number(sv.base_price_cents)) }} />
+          <datalist id="si-cat">{services.data?.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+        </div>
+        <div className="grid grid-cols-[1fr_6rem] gap-3">
+          <MoneyInput label="Valor (R$)" cents={price} onCents={setPrice} />
+          <Input label="Qtd" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+        </div>
+        {canApprove && <Checkbox label="O cliente já aprovou este valor" checked={approved} onChange={setApproved} />}
+        {!approved && <p className="text-xs text-slate-500">Fica aguardando aprovação. Mande o orçamento para o cliente aprovar pelo link.</p>}
+        <Button size="lg" className="w-full" loading={busy} disabled={!desc.trim() || price === null} onClick={save}>Adicionar</Button>
+      </div>
+    </Modal>
+  )
+}
+
+/** "Pronto para entrega": uma pergunta sobre o retorno do cliente. */
+function FinishModal({ open, onClose, o, reload }: { open: boolean; onClose: () => void; o: any; reload: () => void }) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const opts: [string, number, number][] = [['Não precisa', 0, 0], ['3 meses', 3, 0], ['6 meses', 6, 0], ['1 ano', 12, 0], ['10 mil km', 0, 10000], ['6 meses ou 10 mil km', 6, 10000]]
+  async function go(m: number, km: number) {
+    setBusy(true)
+    try { await rpc('finish_service', { p_order: o.id, p_return_months: m || null, p_return_km: km || null }); toast.success('Carro pronto para entrega!'); reload(); onClose() }
+    catch (e) { toast.error(e) } finally { setBusy(false) }
+  }
+  return (
+    <Modal open={open} onClose={onClose} title="Pronto para entrega">
+      <p className="mb-3 text-slate-600">Quando o cliente deve voltar para uma revisão? Ele será lembrado na hora certa.</p>
+      <div className="grid grid-cols-2 gap-2">
+        {opts.map(([l, m, km]) => <Button key={l} size="lg" variant={m || km ? 'secondary' : 'primary'} disabled={busy} onClick={() => go(m, km)}>{l}</Button>)}
+      </div>
+    </Modal>
+  )
+}
+
+/** "Entregar o carro": como foi pago? */
+function DeliverSimpleModal({ open, onClose, o, reload }: { open: boolean; onClose: () => void; o: any; reload: () => void }) {
+  const { can, tz } = useAuth()
+  const toast = useToast()
+  const [mode, setMode] = useState<'' | 'paid_now' | 'already_paid' | 'later'>('')
+  const [method, setMethod] = useState('pix')
+  const [due, setDue] = useState(todayLocal(tz, 7))
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (open) setMode('') }, [open])
+  const canCharge = can('payments.receive')
+  async function go() {
+    setBusy(true)
+    try { await rpc('deliver_simple', { p_order: o.id, p_mode: mode, p_method: mode === 'paid_now' ? method : null, p_due: mode === 'later' ? due : null }); toast.success('Carro entregue'); reload(); onClose() }
+    catch (e) { toast.error(e) } finally { setBusy(false) }
+  }
+  const opt = (v: typeof mode, l: string, sub: string) => (
+    <button onClick={() => setMode(v)} aria-pressed={mode === v} className={clsx('w-full rounded-2xl border p-4 text-left', mode === v ? 'border-brand bg-brand-soft' : 'border-slate-200')}>
+      <span className="block font-semibold">{l}</span><span className="text-sm text-slate-500">{sub}</span>
+    </button>
+  )
+  return (
+    <Modal open={open} onClose={onClose} title="Entregar o carro">
+      <div className="space-y-2">
+        {o.totals && <p className="mb-1 font-heading text-2xl font-extrabold">{brl(o.totals.approved_total_cents)}</p>}
+        <p className="text-slate-600">Como foi pago?</p>
+        {canCharge && opt('paid_now', 'Pagou agora', 'Registrar o pagamento')}
+        {mode === 'paid_now' && (
+          <div className="grid grid-cols-2 gap-2">{[['pix', 'Pix'], ['dinheiro', 'Dinheiro'], ['cartao_debito', 'Débito'], ['cartao_credito', 'Crédito']].map(([v, l]) => (
+            <button key={v} onClick={() => setMethod(v)} aria-pressed={method === v} className={clsx('h-11 rounded-xl border font-medium', method === v ? 'border-brand bg-brand text-white' : 'border-slate-300')}>{l}</button>
+          ))}</div>
+        )}
+        {opt('already_paid', 'Já tinha pago', 'Sem lançar valor agora')}
+        {canCharge && opt('later', 'Vai pagar depois', 'Fica em aberto no financeiro')}
+        {mode === 'later' && <Input label="Paga até" type="date" value={due} onChange={(e) => setDue(e.target.value)} />}
+        <Button size="lg" className="mt-2 w-full" disabled={!mode} loading={busy} onClick={go}>Confirmar entrega</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// Etapas como o cliente e o mecânico entendem: 4 passos.
+const STEPS: [string, string[]][] = [
+  ['Recebido', ['open', 'diagnosis', 'awaiting_approval', 'approved']],
+  ['Em serviço', ['in_progress', 'quality_check']],
+  ['Pronto', ['ready']],
+  ['Entregue', ['delivered']],
+]
 
 function StageBar({ status }: { status: string }) {
-  const idx = STAGES.indexOf(status)
+  const idx = STEPS.findIndex(([, list]) => list.includes(status))
   return (
-    <div className="mt-3">
-      <div className="flex gap-1" aria-hidden>{STAGES.map((s, i) => <span key={s} className={clsx('h-1.5 flex-1 rounded-full', i <= idx ? 'bg-brand' : 'bg-slate-200')} />)}</div>
-      <p className="mt-1 text-xs text-slate-500">Etapa {idx + 1} de {STAGES.length}: <b className="text-ink">{orderStatus[status]?.[0]}</b></p>
-    </div>
+    <ol className="mt-4 grid grid-cols-4 gap-1.5" aria-label="Etapas">
+      {STEPS.map(([label], i) => (
+        <li key={label} className="text-center">
+          <span className={clsx('block h-1.5 rounded-full', i <= idx ? 'bg-brand' : 'bg-slate-200')} />
+          <span className={clsx('mt-1 block text-[11px] font-medium', i === idx ? 'text-brand-strong' : 'text-slate-500')}>{label}</span>
+        </li>
+      ))}
+      {status === 'awaiting_approval' && <li className="col-span-4 mt-1 text-center text-xs text-amber-700">Esperando o cliente aprovar o orçamento</li>}
+    </ol>
   )
 }
 
@@ -636,31 +778,6 @@ function AddItemModal({ open, onClose, o, reload }: { open: boolean; onClose: ()
             <Input label="Nome de quem autorizou" value={f.who} onChange={(e) => setF((s) => ({ ...s, who: e.target.value }))} />
           </div>}
         </div>}
-      </div>
-    </Modal>
-  )
-}
-
-function DeliverModal({ open, onClose, o, reload }: { open: boolean; onClose: () => void; o: any; reload: () => void }) {
-  const toast = useToast()
-  const { can } = useAuth()
-  const [f, setF] = useState({ notes: '', payment: '', km: '', balance: false })
-  const [busy, setBusy] = useState(false)
-  async function go() {
-    setBusy(true)
-    try {
-      await rpc('deliver_order', { p_order: o.id, p_notes: f.notes, p_payment_note: f.payment, p_km_exit: f.km ? Number(f.km) : null, p_allow_balance: f.balance })
-      toast.success('Entrega registrada'); reload(); onClose()
-    } catch (e) { toast.error(e) } finally { setBusy(false) }
-  }
-  return (
-    <Modal open={open} onClose={onClose} title="Registrar entrega" footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button loading={busy} onClick={go}>Confirmar entrega</Button></>}>
-      <div className="space-y-3">
-        <Textarea label="Orientações ao cliente" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} placeholder="Cuidados, próximos serviços, garantia..." />
-        <Input label="Quilometragem de saída (opcional)" inputMode="numeric" value={f.km} onChange={(e) => setF((s) => ({ ...s, km: e.target.value.replace(/\D/g, '') }))} />
-        <Textarea label="Situação de pagamento" value={f.payment} onChange={(e) => setF((s) => ({ ...s, payment: e.target.value }))} placeholder="Ex.: pago integralmente no Pix; ou saldo de R$ X para dia DD/MM" />
-        {can('payments.receive') && <Checkbox label="Entregar com saldo a receber (registrado acima)" checked={f.balance} onChange={(v) => setF((s) => ({ ...s, balance: v }))} />}
-        <p className="text-xs text-slate-500">Serviço concluído não significa pago. Na entrega, os ciclos preventivos dos componentes executados são encerrados e renovados com a data e km reais.</p>
       </div>
     </Modal>
   )

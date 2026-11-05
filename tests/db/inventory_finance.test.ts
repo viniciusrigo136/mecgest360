@@ -117,8 +117,7 @@ describe('financeiro', () => {
   })
 
   it('pagamento parcial, idempotência, limite de saldo, estorno e caixa', async () => {
-    await expectError(rpc(fin.userId, 'register_payment', { p_installment: inst[0], p_amount_cents: 5000, p_method: 'dinheiro', p_idem: 'p1' }),
-      'Abra o caixa')
+    // caixa é opcional: com caixa aberto, o dinheiro entra no caixa
     await rpc(fin.userId, 'open_cash', { p_workshop: ws, p_opening_cents: 10000 })
     const p1 = await rpc(fin.userId, 'register_payment', { p_installment: inst[0], p_amount_cents: 5000, p_method: 'dinheiro', p_idem: 'p1' })
     const p1b = await rpc(fin.userId, 'register_payment', { p_installment: inst[0], p_amount_cents: 5000, p_method: 'dinheiro', p_idem: 'p1' })

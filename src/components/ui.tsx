@@ -203,15 +203,17 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open])
   return (
     <dialog ref={ref} onClose={onClose} onCancel={(e) => { e.preventDefault(); onClose() }}
-      className={clsx('m-auto w-[calc(100%-2rem)] rounded-lg p-0 shadow-xl backdrop:bg-slate-900/40', wide ? 'max-w-3xl' : 'max-w-lg')}>
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      className={clsx('mx-auto mb-0 mt-auto w-full max-w-none rounded-t-3xl bg-card p-0 text-ink shadow-xl backdrop:bg-ink/40 backdrop:backdrop-blur-[2px]',
+        'sm:m-auto sm:w-[calc(100%-2rem)] sm:rounded-3xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}>
       {open && (
-        <div className="flex max-h-[85vh] flex-col">
-          <header className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <h2 className="font-semibold">{title}</h2>
-            <button aria-label="Fechar" onClick={onClose} className="rounded p-1 hover:bg-slate-100"><X className="size-4" /></button>
+        <div className="flex max-h-[92dvh] flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <header className="flex items-center justify-between gap-3 px-5 pb-2 pt-5">
+            <h2 className="font-heading text-xl font-extrabold">{title}</h2>
+            <button aria-label="Fechar" onClick={onClose} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 active:bg-slate-200"><X className="size-5" /></button>
           </header>
-          <div className="overflow-y-auto p-4">{children}</div>
-          {footer && <footer className="flex justify-end gap-2 border-t border-slate-100 px-4 py-3">{footer}</footer>}
+          <div className="overflow-y-auto px-5 pb-5 pt-2">{children}</div>
+          {footer && <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">{footer}</footer>}
         </div>
       )}
     </dialog>

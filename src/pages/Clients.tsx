@@ -18,7 +18,7 @@ export function ClientsPage() {
   const toast = useToast()
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(() => new URLSearchParams(location.search).get('novo') === '1')
   const nav = useNavigate()
   const list = useQuery({
     queryKey: ['clients', wsId, q, page],

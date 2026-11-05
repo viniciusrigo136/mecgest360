@@ -9,6 +9,7 @@ import { ClientDetail, ClientsPage } from '@/pages/Clients'
 import { ContactsPage } from '@/pages/Contacts'
 import { Dashboard } from '@/pages/Dashboard'
 import { FinancePage } from '@/pages/Finance'
+import { IndicatorsPage } from '@/pages/Indicators'
 import { InventoryPage } from '@/pages/Inventory'
 import { MaintenancePage } from '@/pages/Maintenance'
 import { NewOrder, OrderDetail, OrdersPage } from '@/pages/Orders'
@@ -67,6 +68,7 @@ const router = createBrowserRouter([
       { path: 'estoque', element: <Guard perm="inventory.view"><InventoryPage /></Guard> },
       { path: 'compras', element: <Guard perm="purchasing.view"><PurchasingPage /></Guard> },
       { path: 'financeiro', element: <Guard perm={['finance.view', 'cash.operate']}><FinancePage /></Guard> },
+      { path: 'indicadores', element: <Guard perm="reports.view"><IndicatorsPage /></Guard> },
       { path: 'relatorios', element: <Guard perm="reports.view"><ReportsPage /></Guard> },
       { path: 'equipe', element: <Guard perm="team.view"><TeamPage /></Guard> },
       { path: 'configuracoes', element: <Guard perm="settings.manage"><SettingsPage /></Guard> },
