@@ -5,6 +5,8 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // só variáveis públicas com estes prefixos chegam ao navegador
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     include: ['src/**/*.test.{ts,tsx}'],
