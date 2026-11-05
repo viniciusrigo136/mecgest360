@@ -2,15 +2,15 @@
 export type Tone = 'gray' | 'blue' | 'amber' | 'green' | 'red' | 'violet' | 'cyan'
 
 export const orderStatus: Record<string, [string, Tone]> = {
-  open: ['Aberta', 'gray'],
-  diagnosis: ['Diagnóstico', 'cyan'],
-  awaiting_approval: ['Aguardando aprovação', 'amber'],
-  approved: ['Aprovada / programada', 'blue'],
-  in_progress: ['Em execução', 'violet'],
-  quality_check: ['Controle de qualidade', 'cyan'],
-  ready: ['Pronta', 'green'],
+  open: ['Carro recebido', 'gray'],
+  diagnosis: ['Em diagnóstico', 'cyan'],
+  awaiting_approval: ['Esperando aprovação', 'amber'],
+  approved: ['Aprovado', 'blue'],
+  in_progress: ['Em serviço', 'blue'],
+  quality_check: ['Conferência final', 'violet'],
+  ready: ['Pronto para entrega', 'green'],
   delivered: ['Entregue', 'gray'],
-  cancelled: ['Cancelada', 'red'],
+  cancelled: ['Cancelado', 'red'],
 }
 
 export const itemStatus: Record<string, [string, Tone]> = {

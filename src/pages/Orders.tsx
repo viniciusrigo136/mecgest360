@@ -6,13 +6,14 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
 import { ClientVehiclePicker, useTeam, type Picked } from '@/components/pickers'
 import {
-  Badge, Button, Card, Checkbox, ErrorBox, Input, Loading, Modal, MoneyInput, PageHeader, Pager, Select, StatusBadge, Table, Tabs, Textarea, useToast, useUnsavedWarning,
+  Badge, Button, Card, Checkbox, ErrorBox, Input, Loading, Modal, MoneyInput, PageHeader, Pager, Select, StatusBadge, Tabs, Textarea, useToast, useUnsavedWarning,
 } from '@/components/ui'
 import { isConflict } from '@/lib/errors'
 import { brl, fmtDate, fmtDateTime, fmtKm, fmtPlate, fmtQty, localToISO } from '@/lib/format'
 import { COMPONENTS, fuelLabels, itemStatus, kindLabel, orderStatus, quoteStatus } from '@/lib/labels'
 import { rpc, supabase } from '@/lib/supabase'
 import { portalUrl, waLink } from '@/lib/whatsapp'
+import { CarCard } from './Dashboard'
 import { MaintenancePlanModal } from './Maintenance'
 
 const PAGE = 30
@@ -29,35 +30,27 @@ export function OrdersPage() {
     queryKey: ['orders', wsId, filter, q, page],
     queryFn: () => rpc<any[]>('orders_board', { p_workshop: wsId, p_status: status, p_q: q || null, p_limit: PAGE, p_offset: page * PAGE }),
   })
-  const team = useTeam()
-  const name = (id: string) => team.data?.find((m) => m.id === id)?.name
+  const { tz } = useAuth()
+  const setFilter = (f: string) => { const p = new URLSearchParams(params); p.set('f', f); setParams(p, { replace: true }); setPage(0) }
+  const filters: [string, string][] = [['ativas', 'Na oficina'], ['awaiting_approval', 'Esperando aprovação'], ['in_progress', 'Em serviço'],
+    ['ready', 'Prontos'], ['delivered', 'Entregues'], ['todas', 'Todos']]
   return (
-    <div>
-      <PageHeader title="Ordens de serviço" actions={can('orders.create') && <Link to="/os/nova" className="inline-flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white"><Plus className="size-4" />Nova OS</Link>} />
-      <div className="card">
-        <div className="grid gap-3 p-3 sm:grid-cols-3">
-          <Input label="Buscar" value={q} onChange={(e) => { setQ(e.target.value); setPage(0) }} placeholder="Nº da OS, placa ou cliente" />
-          <Select label="Situação" value={filter} onChange={(e) => { const p = new URLSearchParams(params); p.set('f', e.target.value); setParams(p, { replace: true }); setPage(0) }}>
-            <option value="ativas">Em andamento</option><option value="todas">Todas</option>
-            {Object.entries(orderStatus).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}
-          </Select>
-        </div>
-        {list.error ? <div className="p-3"><ErrorBox error={list.error} /></div> : list.isLoading ? <Loading /> : <>
-          <Table head={['OS', 'Veículo', 'Cliente', 'Entrada', 'Previsão', 'Responsável', 'Situação']} empty={!list.data?.length}>
-            {list.data?.map((o) => (
-              <tr key={o.id} className="hover:bg-slate-50">
-                <td className="td font-medium"><Link className="text-brand" to={`/os/${o.id}`}>{o.number}</Link></td>
-                <td className="td">{fmtPlate(o.plate)} <span className="text-slate-500">{o.vehicle_label}</span></td>
-                <td className="td">{o.client_name}</td><td className="td">{fmtDate(o.entry_at)}</td>
-                <td className={clsx('td', o.late && 'font-medium text-red-600')}>{o.expected_delivery_at ? fmtDateTime(o.expected_delivery_at) : '—'}{o.late && ' (atrasada)'}</td>
-                <td className="td">{name(o.responsible_membership_id) ?? o.assigned.map(name).filter(Boolean).join(', ')}</td>
-                <td className="td"><div className="flex flex-wrap gap-1"><StatusBadge map={orderStatus} value={o.status} />{o.parts_pending && <Badge tone="amber">Peças pendentes</Badge>}</div></td>
-              </tr>
-            ))}
-          </Table>
-          <Pager page={page} pageSize={PAGE} total={Number(list.data?.[0]?.total_count ?? 0)} onPage={setPage} />
-        </>}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="font-heading text-2xl font-extrabold">Serviços</h1>
+        {can('orders.create') && <Link to="/receber" className="inline-flex h-11 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25"><Plus className="size-4" />Receber carro</Link>}
       </div>
+      <input className="input rounded-full" value={q} onChange={(e) => { setQ(e.target.value); setPage(0) }} placeholder="Buscar placa, cliente ou nº da OS" aria-label="Buscar serviços" />
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+        {filters.map(([k, l]) => (
+          <button key={k} onClick={() => setFilter(k)} className={clsx('min-h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium',
+            filter === k ? 'border-brand bg-brand text-white' : 'border-slate-300 bg-card text-slate-700')}>{l}</button>
+        ))}
+      </div>
+      {list.error ? <ErrorBox error={list.error} /> : list.isLoading ? <Loading /> : list.data?.length ? <>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{list.data.map((o) => <CarCard key={o.id} o={o} tz={tz} />)}</div>
+        <Pager page={page} pageSize={PAGE} total={Number(list.data?.[0]?.total_count ?? 0)} onPage={setPage} />
+      </> : <div className="card p-8 text-center text-sm text-slate-500">Nenhum serviço {filter === 'ativas' ? 'na oficina agora' : 'nesta situação'}.</div>}
     </div>
   )
 }
@@ -163,15 +156,29 @@ export function OrderDetail() {
 
   return (
     <div>
-      <PageHeader
-        title={<span className="flex flex-wrap items-center gap-2">{o.number} <StatusBadge map={orderStatus} value={o.status} />{o.parts_pending && <Badge tone="amber">Peças pendentes</Badge>}{o.warranty_of_order_id && <Badge tone="violet">Garantia</Badge>}</span>}
-        subtitle={<>{fmtPlate(o.vehicle?.plate ?? o.vehicle?.internal_code)} · {o.vehicle?.brand} {o.vehicle?.model} · {can('clients.view') ? <Link className="text-brand" to={`/clientes/${o.client.id}`}>{o.client.name}</Link> : o.client.name} · entrada {fmtDateTime(o.entry_at, tz)} · {fmtKm(o.km_entry)}</>}
-        actions={<div className="no-print flex flex-wrap gap-2">
-          {(nextSteps[o.status] ?? []).filter((s) => can(s.perm)).map((s) => <Button key={s.to} variant={s.to === 'approved' && o.status === 'in_progress' ? 'secondary' : 'primary'} onClick={() => transition(s.to)}>{s.label}</Button>)}
-          {o.status === 'ready' && can('orders.deliver') && <Button onClick={() => setModal('deliver')}>Registrar entrega</Button>}
+      {/* Cabeçalho do carro (padrão ChapGest): placa em destaque, etapa e próxima ação */}
+      <section className="card mb-4 p-4">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="plate text-3xl leading-none">{fmtPlate(o.vehicle?.plate ?? o.vehicle?.internal_code)}</p>
+            <p className="mt-1 text-sm text-slate-700">{o.vehicle?.brand} {o.vehicle?.model} {o.vehicle?.year_model ?? ''} · {can('clients.view') ? <Link className="font-medium text-brand" to={`/clientes/${o.client.id}`}>{o.client.name}</Link> : o.client.name}</p>
+            <p className="text-xs text-slate-500">{o.number} · entrou {fmtDateTime(o.entry_at, tz)} · {fmtKm(o.km_entry)}{o.expected_delivery_at && ` · entrega ${fmtDateTime(o.expected_delivery_at, tz)}`}</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5"><StatusBadge map={orderStatus} value={o.status} />{o.parts_pending && <Badge tone="amber">Esperando peça</Badge>}{o.warranty_of_order_id && <Badge tone="violet">Garantia</Badge>}</div>
+        </div>
+        {o.status !== 'cancelled' && <StageBar status={o.status} />}
+        <div className="no-print mt-3 grid gap-2 sm:flex sm:flex-wrap">
+          {(nextSteps[o.status] ?? []).filter((s) => can(s.perm)).map((s, i) => (
+            <Button key={s.to} size="lg" variant={i === 0 ? 'primary' : 'secondary'} className="w-full sm:w-auto" onClick={() => transition(s.to)}>{s.label}</Button>
+          ))}
+          {o.status === 'ready' && can('orders.deliver') && <Button size="lg" className="w-full sm:w-auto" onClick={() => setModal('deliver')}>Entregar o carro</Button>}
+        </div>
+      </section>
+      {!closed && (can('orders.edit') || can('orders.execute')) && <ClientMessage o={o} reload={reload} />}
+      <PageHeader title="" actions={<div className="no-print -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
           {can('quotes.create') && !closed && <Button variant="secondary" onClick={() => nav(`/orcamentos/novo?order=${id}`)}>{['approved', 'in_progress', 'quality_check'].includes(o.status) ? 'Aditivo (orçamento)' : 'Orçamento'}</Button>}
           {(can('messages.send') || can('orders.edit')) && <Button variant="secondary" onClick={() => setModal('portal')}><Link2 className="size-4" />Link do cliente</Button>}
-          {wa && can('messages.send') && <a className="inline-flex h-10 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm" target="_blank" rel="noopener noreferrer" href={wa}
+          {wa && can('messages.send') && <a className="inline-flex h-10 items-center gap-1.5 rounded-md border border-slate-300 bg-card px-3 text-sm" target="_blank" rel="noopener noreferrer" href={wa}
             onClick={() => rpc('log_contact', { p_workshop: wsId, p_client: o.client.id, p_channel: 'whatsapp', p_kind: 'conversation_opened', p_message: waText, p_outcome: null, p_order: id }).catch(() => {})}><MessageCircle className="size-4" />WhatsApp</a>}
           {can('orders.print') && <Button variant="secondary" onClick={() => window.print()}><Printer className="size-4" />Imprimir</Button>}
           {['ready', 'delivered'].includes(o.status) && can('orders.reopen') && <Button variant="ghost" onClick={() => { const r = prompt('Justificativa da reabertura:'); if (r) act(() => rpc('reopen_order', { p_order: id, p_reason: r }), 'OS reaberta') }}>Reabrir</Button>}
@@ -207,6 +214,45 @@ export function OrderDetail() {
       <MaintenancePlanModal open={modal === 'plan'} onClose={() => { setModal(null); reload() }} vehicleId={o.vehicle_id} orderId={id}
         defaults={o.items.find((i: any) => i.maintenance_component && i.status !== 'cancelled')} baseKm={o.km_entry} />
     </div>
+  )
+}
+
+const STAGES = ['open', 'diagnosis', 'awaiting_approval', 'approved', 'in_progress', 'quality_check', 'ready', 'delivered']
+
+function StageBar({ status }: { status: string }) {
+  const idx = STAGES.indexOf(status)
+  return (
+    <div className="mt-3">
+      <div className="flex gap-1" aria-hidden>{STAGES.map((s, i) => <span key={s} className={clsx('h-1.5 flex-1 rounded-full', i <= idx ? 'bg-brand' : 'bg-slate-200')} />)}</div>
+      <p className="mt-1 text-xs text-slate-500">Etapa {idx + 1} de {STAGES.length}: <b className="text-ink">{orderStatus[status]?.[0]}</b></p>
+    </div>
+  )
+}
+
+/** Recado curto que aparece na página do cliente (portal), como no ChapGest. */
+function ClientMessage({ o, reload }: { o: any; reload: () => void }) {
+  const { wsId } = useAuth()
+  const toast = useToast()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const last = o.events.find((e: any) => e.visible_to_client && e.kind === 'note')
+  async function send() {
+    setBusy(true)
+    const { data: u } = await supabase.auth.getUser()
+    const { error } = await supabase.from('order_events').insert({ workshop_id: wsId, order_id: o.id, kind: 'note', message: text.trim(), visible_to_client: true, author_id: u.user?.id })
+    setBusy(false)
+    if (error) return toast.error(error)
+    setText(''); toast.success('Recado publicado na página do cliente'); reload()
+  }
+  return (
+    <section className="card no-print mb-4 p-4">
+      <h2 className="font-bold">Recado para o cliente</h2>
+      <p className="mb-2 text-sm text-slate-500">Aparece na página de acompanhamento dele.{last && <> Último: <i>"{last.message}"</i></>}</p>
+      <div className="flex gap-2">
+        <input className="input" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder="Ex.: A peça chegou, começamos a montagem hoje." aria-label="Recado para o cliente" />
+        <Button loading={busy} disabled={!text.trim()} onClick={send}>Enviar</Button>
+      </div>
+    </section>
   )
 }
 

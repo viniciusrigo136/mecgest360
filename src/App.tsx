@@ -15,6 +15,7 @@ import { NewOrder, OrderDetail, OrdersPage } from '@/pages/Orders'
 import { PortalPage } from '@/pages/Portal'
 import { PurchasingPage } from '@/pages/Purchasing'
 import { QuoteEditor, QuotesPage } from '@/pages/Quotes'
+import { ReceivePage } from '@/pages/Receive'
 import { ReportsPage } from '@/pages/Reports'
 import { SchedulePage } from '@/pages/Schedule'
 import { SettingsPage } from '@/pages/Settings'
@@ -52,6 +53,7 @@ const router = createBrowserRouter([
       { path: 'agenda', element: <Guard perm="schedule.view"><SchedulePage /></Guard> },
       { path: 'os', element: <Guard perm="orders.view"><OrdersPage /></Guard> },
       { path: 'os/nova', element: <Guard perm="orders.create"><NewOrder /></Guard> },
+      { path: 'receber', element: <Guard perm="orders.create"><ReceivePage /></Guard> },
       { path: 'os/:id', element: <Guard perm="orders.view"><OrderDetail /></Guard> },
       { path: 'clientes', element: <Guard perm="clients.view"><ClientsPage /></Guard> },
       { path: 'clientes/:id', element: <Guard perm="clients.view"><ClientDetail /></Guard> },

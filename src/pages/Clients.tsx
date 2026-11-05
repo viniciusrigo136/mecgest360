@@ -204,7 +204,7 @@ export function ClientDetail() {
   return (
     <div>
       <PageHeader title={cl.name} subtitle={<>{fmtPhone(cl.phone)} {cl.email && `· ${cl.email}`} {cl.archived_at && <Badge tone="gray">Arquivado</Badge>}</>} actions={<>
-        {wa && can('messages.send') && <a href={wa} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 text-sm"
+        {wa && can('messages.send') && <a href={wa} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-1.5 rounded-md border border-slate-300 bg-card px-4 text-sm"
           onClick={() => rpc('log_contact', { p_workshop: wsId, p_client: id, p_channel: 'whatsapp', p_kind: 'conversation_opened', p_message: null, p_outcome: null }).catch(() => {})}>
           <MessageCircle className="size-4" />WhatsApp</a>}
         {can('clients.edit') && <Button variant="secondary" onClick={() => setEdit(true)}>Editar</Button>}

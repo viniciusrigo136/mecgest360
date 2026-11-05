@@ -10,7 +10,7 @@ import type { Tone } from '@/lib/labels'
 // ---------- Botões ----------
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
-  size?: 'sm' | 'md'
+  size?: 'sm' | 'md' | 'lg'
   loading?: boolean
 }
 export function Button({ variant = 'primary', size = 'md', loading, className, children, disabled, ...rest }: BtnProps) {
@@ -21,9 +21,9 @@ export function Button({ variant = 'primary', size = 'md', loading, className, c
       aria-busy={loading || undefined}
       className={clsx(
         'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-        size === 'sm' ? 'h-8 px-2.5 text-sm' : 'h-10 px-4 text-sm',
-        variant === 'primary' && 'bg-brand text-white hover:brightness-110',
-        variant === 'secondary' && 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50',
+        size === 'sm' ? 'h-9 px-3 text-sm' : size === 'lg' ? 'h-12 px-5 text-base font-semibold' : 'h-10 px-4 text-sm',
+        variant === 'primary' && 'bg-brand text-white shadow-sm shadow-brand/25 hover:bg-[#1D4ED8] active:scale-[0.98]',
+        variant === 'secondary' && 'border border-slate-200 bg-secondary text-ink hover:bg-slate-100',
         variant === 'danger' && 'bg-red-600 text-white hover:bg-red-700',
         variant === 'ghost' && 'text-slate-700 hover:bg-slate-100',
         className,
@@ -120,10 +120,10 @@ export function NoAccess() {
 export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+      {(title || subtitle) && <div>
+        {title && <h1 className="font-heading text-2xl font-extrabold text-ink">{title}</h1>}
         {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
-      </div>
+      </div>}
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   )
@@ -158,7 +158,7 @@ export function Table({ head, children, empty }: { head: ReactNode[]; children: 
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-slate-200">
         <thead className="bg-slate-50"><tr>{head.map((h, i) => <th key={i} className="th">{h}</th>)}</tr></thead>
-        <tbody className="divide-y divide-slate-100 bg-white">{children}</tbody>
+        <tbody className="divide-y divide-slate-100 bg-card">{children}</tbody>
       </table>
       {empty && <Empty title="Nenhum registro encontrado" />}
     </div>

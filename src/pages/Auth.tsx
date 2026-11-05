@@ -9,9 +9,9 @@ import { rpc, supabase } from '@/lib/supabase'
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-navy-900 p-4">
-      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand">MecGest 360</p>
+    <div className="flex min-h-dvh items-center justify-center bg-page p-4">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-card p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-2"><span className="flex size-9 items-center justify-center rounded-[10px] bg-brand font-heading text-sm font-extrabold text-white">MG</span><p className="font-heading text-lg font-extrabold">MecGest <span className="text-brand">360</span></p></div>
         <h1 className="mb-4 mt-1 text-lg font-semibold">{title}</h1>
         {children}
       </div>

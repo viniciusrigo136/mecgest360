@@ -1,32 +1,79 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Identidade TecGest 360: azul #2563EB, grafite #0F172A, fundo #F8FAFC,
+   cartões brancos com borda #E2E8F0, raio 10px, Manrope (títulos) + Inter (texto). */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --color-navy-950: #0b1524;
-  --color-navy-900: #0f1b2d;
-  --color-navy-800: #172a45;
-  --color-navy-700: #22395c;
-  --color-brand: var(--brand, #1d4ed8);
-  --color-brand-soft: color-mix(in srgb, var(--brand, #1d4ed8) 10%, white);
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: "Manrope", "Inter", system-ui, sans-serif;
+  --font-plate: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+
+  --radius-md: 0.625rem;   /* 10px: cartões e botões */
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+
+  --color-brand: #2563EB;
+  --color-brand-strong: #1E40AF;
+  --color-brand-soft: #E8F0FE;
+  --color-brand-light: #60A5FA;
+  --color-page: #F8FAFC;
+  --color-card: #FFFFFF;
+  --color-ink: #0F172A;
+  --color-secondary: #EFF4FB;
+  --color-wa: #1fa855;
+  --color-wa-dark: #178a45;
+
+  /* slate do Tailwind coincide com os tons do guia (#F1F5F9, #E2E8F0, #CBD5E1, #475569) */
+}
+
+/* Tema escuro opcional (guia TecGest) */
+.dark {
+  color-scheme: dark;
+  --color-page: #0F172A;
+  --color-card: #16213A;
+  --color-ink: #F8FAFC;
+  --color-secondary: #1E293B;
+  --color-brand-soft: #1E3A8A;
+  --color-brand-strong: #BFD3FF;
+  --color-slate-50: #1A2540;
+  --color-slate-100: #1E293B;
+  --color-slate-200: #273552;
+  --color-slate-300: #334466;
+  --color-slate-400: #7A8AA6;
+  --color-slate-500: #A7B4C8;
+  --color-slate-600: #BAC5D6;
+  --color-slate-700: #CDD6E3;
+  --color-slate-800: #E2E8F0;
+  --color-slate-900: #F8FAFC;
+  --color-red-50: #2C1518; --color-red-200: #5B2229; --color-red-600: #F87171; --color-red-700: #FCA5A5; --color-red-800: #FECACA;
+  --color-amber-50: #2A2112; --color-amber-200: #5a4415; --color-amber-700: #F3C062; --color-amber-800: #F6CD7C; --color-amber-900: #F9DA98;
+  --color-emerald-50: #0F2A20; --color-emerald-200: #1d4d3a; --color-emerald-700: #6EE7B7; --color-emerald-800: #A7F3D0;
+  --color-blue-50: #172447; --color-blue-200: #2A4182; --color-blue-700: #A3B9FF;
+  --color-violet-50: #251A40; --color-violet-200: #3d2c6b; --color-violet-700: #C4B5FD;
+  --color-cyan-50: #10303A; --color-cyan-200: #1b4e5c; --color-cyan-800: #A5F3FC;
 }
 
 @layer base {
-  html { -webkit-text-size-adjust: 100%; }
-  body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "tnum" 1; }
-  :focus-visible { outline: 2px solid var(--brand, #1d4ed8); outline-offset: 2px; }
+  html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { @apply bg-page text-ink antialiased; font-family: var(--font-sans); font-feature-settings: "tnum" 1; }
+  h1, h2, h3, h4 { font-family: var(--font-heading); }
+  :focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
   input, select, textarea, button { font: inherit; }
 }
 
 @layer components {
   .input {
-    @apply block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-xs
-           placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20
+    @apply block min-h-11 w-full rounded-[8px] border border-slate-300 bg-card px-3 py-2 text-[15px] text-ink
+           placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25
            disabled:bg-slate-100 disabled:text-slate-500 aria-[invalid=true]:border-red-500;
   }
   .label { @apply mb-1 block text-sm font-medium text-slate-700; }
-  .card { @apply rounded-lg border border-slate-200 bg-white shadow-xs; }
+  .card { @apply rounded-md border border-slate-200 bg-card; }
   .th { @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
-  .td { @apply px-3 py-2 text-sm align-top; }
+  .td { @apply px-3 py-2.5 text-sm align-top; }
+  /* placa do veículo em destaque, como no ChapGest */
+  .plate { font-family: var(--font-plate); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 }
 
 @media print {

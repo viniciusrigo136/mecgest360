@@ -26,7 +26,7 @@ export function QuotesPage() {
   } })
   return (
     <div>
-      <PageHeader title="Orçamentos" actions={can('quotes.create') && <Link to="/orcamentos/novo" className="inline-flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white"><Plus className="size-4" />Novo orçamento</Link>} />
+      <PageHeader title="Orçamentos" actions={can('quotes.create') && <Link to="/orcamentos/novo" className="inline-flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white"><Plus className="size-4" />Fazer orçamento</Link>} />
       <div className="card">
         <div className="p-3 sm:w-64"><Select label="Situação" value={status} onChange={(e) => { setStatus(e.target.value); setPage(0) }}><option value="">Todas</option>{Object.entries(quoteStatus).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</Select></div>
         {q.error ? <div className="p-3"><ErrorBox error={q.error} /></div> : q.isLoading ? <Loading /> : <>
@@ -132,10 +132,10 @@ export function QuoteEditor() {
         subtitle={d && <>{d.q.clients?.name} · {fmtPlate(d.q.vehicles?.plate ?? d.q.vehicles?.internal_code)} {d.q.vehicles?.brand} {d.q.vehicles?.model} {d.q.order_id && <Link className="text-brand" to={`/os/${d.q.order_id}`}>· ver OS</Link>}</>}
         actions={<div className="no-print flex flex-wrap gap-2">
           {editable && <Button variant="secondary" loading={busy} onClick={save}>{locked ? 'Salvar como nova versão' : 'Salvar rascunho'}</Button>}
-          {editable && can('quotes.send') && d?.q.status !== 'sent' && <Button onClick={send}>Enviar ao cliente</Button>}
+          {editable && can('quotes.send') && d?.q.status !== 'sent' && <Button onClick={send}>Mandar para o cliente</Button>}
           {d?.q.status === 'sent' && can('quotes.send') && <Button variant="secondary" onClick={() => setModal('link')}>Link de aprovação</Button>}
-          {d?.q.status === 'sent' && can('quotes.approve_onsite') && <Button onClick={() => setModal('decide')}>Registrar decisão</Button>}
-          {d && ['approved', 'partially_approved'].includes(d.q.status) && !d.q.order_id && can('orders.create') && <Button onClick={async () => { try { const oid = await rpc<string>('convert_quote_to_order', { p_quote: d.q.id }); nav(`/os/${oid}`) } catch (e) { toast.error(e) } }}>Converter em OS</Button>}
+          {d?.q.status === 'sent' && can('quotes.approve_onsite') && <Button onClick={() => setModal('decide')}>Cliente respondeu</Button>}
+          {d && ['approved', 'partially_approved'].includes(d.q.status) && !d.q.order_id && can('orders.create') && <Button onClick={async () => { try { const oid = await rpc<string>('convert_quote_to_order', { p_quote: d.q.id }); nav(`/os/${oid}`) } catch (e) { toast.error(e) } }}>Aprovado? Abrir serviço</Button>}
           {d && <Button variant="secondary" onClick={() => window.print()}><Printer className="size-4" />PDF / imprimir</Button>}
         </div>} />
       {locked && editable && <p className="no-print mb-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">Esta versão já foi enviada e está travada. Alterar itens ou preços cria uma <strong>nova versão</strong>; a atual deixa de poder ser aprovada e o link anterior é revogado.</p>}

@@ -69,7 +69,7 @@ export function SchedulePage() {
   }, [q.data, tz])
 
   const Item = ({ a }: { a: any }) => (
-    <div className={clsx('rounded-md border p-2 text-sm', a.status === 'cancelled' ? 'border-slate-200 bg-slate-50 opacity-60' : 'border-slate-200 bg-white')}>
+    <div className={clsx('rounded-md border p-2 text-sm', a.status === 'cancelled' ? 'border-slate-200 bg-slate-50 opacity-60' : 'border-slate-200 bg-card')}>
       <div className="flex flex-wrap items-center gap-2">
         <strong>{fmtTime(a.starts_at, tz)}–{fmtTime(a.ends_at, tz)}</strong>
         <span>{fmtPlate(a.vehicles?.plate ?? a.vehicles?.internal_code)} {a.vehicles?.model}</span>

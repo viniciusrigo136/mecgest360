@@ -42,7 +42,7 @@ function Shell({ children, color, name }: { children: React.ReactNode; color?: s
   useEffect(() => { if (color) document.documentElement.style.setProperty('--brand', color) }, [color])
   return (
     <div className="min-h-dvh bg-slate-50">
-      <header className="bg-navy-900 px-4 py-3 text-white"><p className="mx-auto max-w-2xl font-semibold">{name ?? 'Acompanhamento'}</p></header>
+      <header className="bg-brand px-4 py-3 text-white"><p className="mx-auto max-w-2xl font-heading font-bold">{name ?? 'Acompanhamento'}</p></header>
       <main className="mx-auto max-w-2xl space-y-4 p-4">{children}</main>
     </div>
   )
