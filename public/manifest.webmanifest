@@ -1,0 +1,15 @@
+{
+  "name": "MecGest 360",
+  "short_name": "MecGest",
+  "description": "Gestão da oficina mecânica pelo celular",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8FAFC",
+  "theme_color": "#2563EB",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

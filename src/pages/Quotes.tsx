@@ -67,6 +67,8 @@ export function QuoteEditor() {
   const [busy, setBusy] = useState(false)
   const [modal, setModal] = useState<string | null>(null)
   const [sheet, setSheet] = useState(false)
+  // orçamento novo: depois de enviar, a tela reabre com o link de aprovação
+  useEffect(() => { if (id && params.get('link') === '1') setModal('link') }, [id, params])
   useUnsavedWarning(dirty)
 
   const data = useQuery({ queryKey: ['quote', id], enabled: !!id, queryFn: async () => {
@@ -103,7 +105,7 @@ export function QuoteEditor() {
   const editable = can('quotes.create') && !decided
   const upd = (k: string, patch: Partial<Line>) => { setDirty(true); setLines((s) => s.map((l) => l.key === k ? { ...l, ...patch } : l)) }
 
-  async function save(): Promise<string | null> {
+  async function save(openLink = false): Promise<string | null> {
     if (!picked?.vehicleId) { toast.error({ message: 'Selecione cliente e veículo' }); return null }
     setBusy(true)
     try {
@@ -116,14 +118,14 @@ export function QuoteEditor() {
       setDirty(false)
       toast.success(locked ? 'Nova versão criada (a anterior foi substituída)' : 'Orçamento salvo')
       qc.invalidateQueries({ queryKey: ['quote', qid] }); qc.invalidateQueries({ queryKey: ['quotes'] })
-      if (!id) nav(`/orcamentos/${qid}`, { replace: true })
+      if (!id) nav(`/orcamentos/${qid}${openLink ? '?link=1' : ''}`, { replace: true })
       return qid
     } catch (e) { toast.error(e); return null } finally { setBusy(false) }
   }
   async function send() {
-    const qid = dirty || !id ? await save() : id
+    const qid = dirty || !id ? await save(!id) : id
     if (!qid) return
-    try { await rpc('send_quote', { p_quote: qid }); toast.success('Orçamento enviado e travado'); qc.invalidateQueries({ queryKey: ['quote', qid] }); setModal('link') } catch (e) { toast.error(e) }
+    try { await rpc('send_quote', { p_quote: qid }); toast.success('Orçamento enviado e travado'); qc.invalidateQueries({ queryKey: ['quote', qid] }); if (id) setModal('link') } catch (e) { toast.error(e) }
   }
 
   if (id && data.isLoading) return <Loading />
@@ -134,7 +136,7 @@ export function QuoteEditor() {
       <PageHeader title={d ? <span className="flex items-center gap-2">{d.q.number} <span className="text-sm font-normal text-slate-500">versão {d.cur?.version_no}</span><StatusBadge map={quoteStatus} value={d.q.status} />{d.q.is_addendum && <Badge tone="violet">aditivo</Badge>}</span> : orderId ? 'Novo orçamento da OS' : 'Novo orçamento'}
         subtitle={d && <>{d.q.clients?.name} · {fmtPlate(d.q.vehicles?.plate ?? d.q.vehicles?.internal_code)} {d.q.vehicles?.brand} {d.q.vehicles?.model} {d.q.order_id && <Link className="text-brand" to={`/os/${d.q.order_id}`}>· ver OS</Link>}</>}
         actions={<div className="no-print flex flex-wrap gap-2">
-          {editable && <Button variant="secondary" loading={busy} onClick={save}>{locked ? 'Salvar como nova versão' : 'Salvar rascunho'}</Button>}
+          {editable && <Button variant="secondary" loading={busy} onClick={() => save()}>{locked ? 'Salvar como nova versão' : 'Salvar rascunho'}</Button>}
           {editable && can('quotes.send') && d?.q.status !== 'sent' && <Button onClick={send}>Mandar para o cliente</Button>}
           {d?.q.status === 'sent' && can('quotes.send') && <Button variant="secondary" onClick={() => setModal('link')}>Link de aprovação</Button>}
           {d?.q.status === 'sent' && can('quotes.approve_onsite') && <Button onClick={() => setModal('decide')}>Cliente respondeu</Button>}

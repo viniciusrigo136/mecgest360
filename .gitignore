@@ -33,3 +33,6 @@ supabase/.branches/
 test-results/
 playwright-report/
 coverage/
+
+# testes E2E
+e2e/.tmp/

@@ -195,6 +195,7 @@ export function Tabs({ tabs, value, onChange }: { tabs: { key: string; label: st
 // ---------- Modal ----------
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
   useEffect(() => {
     const d = ref.current
     if (!d) return
@@ -202,14 +203,17 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
     if (!open && d.open) d.close()
   }, [open])
   return (
-    <dialog ref={ref} onClose={onClose} onCancel={(e) => { e.preventDefault(); onClose() }}
+    <dialog ref={ref} aria-labelledby={titleId}
+      // janelas dentro de janelas: só reage ao fechamento desta, não ao de uma janela interna
+      onClose={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onCancel={(e) => { if (e.target !== e.currentTarget) return; e.preventDefault(); onClose() }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       className={clsx('mx-auto mb-0 mt-auto w-full max-w-none rounded-t-3xl bg-card p-0 text-ink shadow-xl backdrop:bg-ink/40 backdrop:backdrop-blur-[2px]',
         'sm:m-auto sm:w-[calc(100%-2rem)] sm:rounded-3xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}>
       {open && (
         <div className="flex max-h-[92dvh] flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <header className="flex items-center justify-between gap-3 px-5 pb-2 pt-5">
-            <h2 className="font-heading text-xl font-extrabold">{title}</h2>
+            <h2 id={titleId} className="font-heading text-xl font-extrabold">{title}</h2>
             <button aria-label="Fechar" onClick={onClose} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 active:bg-slate-200"><X className="size-5" /></button>
           </header>
           <div className="overflow-y-auto px-5 pb-5 pt-2">{children}</div>
