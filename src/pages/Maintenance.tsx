@@ -8,6 +8,7 @@ import { fmtDate, fmtDateTime, fmtKm, todayLocal } from '@/lib/format'
 import { COMPONENTS, contactStatus, techStatus } from '@/lib/labels'
 import { rpc, supabase } from '@/lib/supabase'
 import { maskPlate, renderTemplate, waLink } from '@/lib/whatsapp'
+import { CallBack } from '@/components/CallBack'
 
 export function MaintenancePage() {
   const { wsId, can, ws } = useAuth()
@@ -35,7 +36,9 @@ export function MaintenancePage() {
 
   return (
     <div>
-      <PageHeader title="Manutenção preventiva" subtitle="Situação técnica e situação de contato são independentes. Km projetado é estimativa — nunca vencimento confirmado." />
+      <PageHeader title="Chamar de volta" subtitle="Clientes que devem voltar à oficina. Km projetado é estimativa — confirme a km com o cliente." />
+      <div className="mb-4"><CallBack limit={20} full /></div>
+      <h2 className="mb-2 text-lg font-bold">Todos os lembretes</h2>
       <div className="card mb-3 grid gap-3 p-3 sm:grid-cols-3">
         <Select label="Situação técnica" value={tech} onChange={(e) => setTech(e.target.value)}>
           <option value="acao">Precisam de ação</option><option value="">Todas</option>{Object.entries(techStatus).filter(([k]) => !['completed', 'cancelled'].includes(k)).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}

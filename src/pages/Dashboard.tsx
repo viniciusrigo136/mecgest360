@@ -2,11 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CalendarPlus, CarFront, ChevronRight, Clock, FileText, PackageX, Timer } from 'lucide-react'
 import { Link } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
+import { CallBack } from '@/components/CallBack'
 import { DaySummary } from '@/components/DaySummary'
 import { Plate } from '@/components/Plate'
 import { ErrorBox, Loading, StatusBadge } from '@/components/ui'
 import { brl, fmtDateTime, fmtPlate } from '@/lib/format'
-import { orderStatus, techStatus } from '@/lib/labels'
+import { orderStatus } from '@/lib/labels'
 import { rpc } from '@/lib/supabase'
 
 const IN_SHOP = ['open', 'diagnosis', 'awaiting_approval', 'approved', 'in_progress', 'quality_check', 'ready']
@@ -51,6 +52,8 @@ export function Dashboard() {
 
       {q.error && <ErrorBox error={q.error} onRetry={() => q.refetch()} />}
 
+      <CallBack />
+
       {/* Resumo do dia */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {can('orders.view') && <Mini label="Na oficina" value={cars.length} to="/os" />}
@@ -92,14 +95,6 @@ export function Dashboard() {
         </section>
       )}
 
-      {'maintenance' in d && Object.keys(d.maintenance).length > 0 && (
-        <section className="card p-4">
-          <div className="mb-2 flex items-center justify-between"><h2 className="font-bold">Retornos preventivos</h2><Link className="text-sm font-medium text-brand" to="/preventiva">Abrir</Link></div>
-          <div className="flex flex-wrap gap-3">{Object.entries(d.maintenance as Record<string, number>).filter(([k]) => k !== 'ok').map(([k, n]) => (
-            <span key={k} className="flex items-center gap-1.5"><StatusBadge map={techStatus} value={k} /><b>{n}</b></span>
-          ))}</div>
-        </section>
-      )}
       {q.isLoading && <Loading />}
     </div>
   )

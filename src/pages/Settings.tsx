@@ -1,13 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
 import { Badge, Button, Card, Checkbox, ErrorBox, Input, Loading, Modal, MoneyInput, PageHeader, Select, Table, Tabs, Textarea, useToast } from '@/components/ui'
 import { brl, fmtDateTime } from '@/lib/format'
 import { COMPONENTS } from '@/lib/labels'
 import { supabase } from '@/lib/supabase'
-import { StaffSettings } from './Staff'
 import { renderTemplate } from '@/lib/whatsapp'
 
 const DAYS = [['1', 'Segunda'], ['2', 'Terça'], ['3', 'Quarta'], ['4', 'Quinta'], ['5', 'Sexta'], ['6', 'Sábado'], ['0', 'Domingo']]
@@ -18,12 +16,10 @@ export function SettingsPage() {
   return (
     <div>
       <PageHeader title="Configurações" />
-      <Tabs value={['horarios', 'checklists', 'integracoes', 'auditoria'].includes(tab) ? 'mais' : tab} onChange={setTab} tabs={[{ key: 'oficina', label: 'Sua oficina' },
-        ...(can('team.view') ? [{ key: 'funcionarios', label: 'Funcionários' }] : []), { key: 'catalogo', label: 'Serviços e preços' },
-        { key: 'mensagens', label: 'Mensagens' }, { key: 'mais', label: 'Mais' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ key: 'oficina', label: 'Sua oficina' }, { key: 'catalogo', label: 'Serviços e preços' },
+        { key: 'mensagens', label: 'Mensagens' }, { key: 'horarios', label: 'Horários' }, { key: 'checklists', label: 'Checklists' },
+        ...(can('integrations.manage') ? [{ key: 'integracoes', label: 'Integrações' }] : []), ...(can('audit.view') ? [{ key: 'auditoria', label: 'Auditoria' }] : [])]} />
       {tab === 'oficina' && <WorkshopForm />}
-      {tab === 'funcionarios' && <StaffSettings />}
-      {tab === 'mais' && <MoreTools onTab={setTab} />}
       {tab === 'horarios' && <Hours />}
       {tab === 'catalogo' && <Catalog />}
       {tab === 'checklists' && <Checklists />}
@@ -286,32 +282,5 @@ function Audit() {
           <details className="text-xs text-slate-500"><summary className="cursor-pointer">alterações</summary><pre className="overflow-x-auto whitespace-pre-wrap">{JSON.stringify(a.changes, null, 1)}</pre></details></li>
       ))}</ul>}
     </Card>
-  )
-}
-
-
-// Ferramentas avançadas fora do menu principal, para quem precisar.
-function MoreTools({ onTab }: { onTab: (t: string) => void }) {
-  const { can } = useAuth()
-  const links: [string, string, string, string][] = [
-    ['/agenda', 'Agenda', 'Horários marcados', 'schedule.view'],
-    ['/veiculos', 'Veículos', 'Todos os carros e km', 'vehicles.view'],
-    ['/preventiva', 'Retornos de revisão', 'Quem precisa voltar', 'maintenance.view'],
-    ['/contatos', 'Contatos', 'Tarefas e mensagens', 'contacts.view'],
-    ['/estoque', 'Estoque', 'Peças e saldo', 'inventory.view'],
-    ['/compras', 'Compras', 'Fornecedores e pedidos', 'purchasing.view'],
-    ['/financeiro', 'Financeiro', 'A receber, a pagar e caixa', 'finance.view'],
-    ['/relatorios', 'Relatórios completos', 'Operação e financeiro', 'reports.view'],
-    ['/equipe', 'Permissões avançadas', 'Ajuste fino por pessoa', 'team.manage'],
-  ]
-  const tabs: [string, string, boolean][] = [['horarios', 'Horários e boxes', true], ['checklists', 'Checklists', true],
-    ['integracoes', 'Integrações', can('integrations.manage')], ['auditoria', 'Auditoria', can('audit.view')]]
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{links.filter((l) => can(l[3])).map(([to, t, sub]) => (
-        <Link key={to} to={to} className="card p-4 active:bg-slate-50"><span className="block font-semibold">{t}</span><span className="text-sm text-slate-500">{sub}</span></Link>
-      ))}</div>
-      <div className="flex flex-wrap gap-2">{tabs.filter((t) => t[2]).map(([k, l]) => <Button key={k} variant="secondary" onClick={() => onTab(k)}>{l}</Button>)}</div>
-    </div>
   )
 }

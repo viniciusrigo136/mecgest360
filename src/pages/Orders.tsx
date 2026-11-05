@@ -14,6 +14,7 @@ import { COMPONENTS, fuelLabels, itemStatus, kindLabel, orderStatus, quoteStatus
 import { rpc, supabase } from '@/lib/supabase'
 import { portalUrl, waLink } from '@/lib/whatsapp'
 import { Plate } from '@/components/Plate'
+import { RemindersCard, ReturnPicker } from '@/components/ReturnReminder'
 import { CarCard } from './Dashboard'
 import { MaintenancePlanModal } from './Maintenance'
 
@@ -201,6 +202,8 @@ export function OrderDetail() {
         {o.totals && <p className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-heading text-lg font-extrabold"><span>Total</span><span>{brl(o.totals.approved_total_cents)}</span></p>}
       </section>
 
+      {o.status !== 'cancelled' && <RemindersCard orderId={o.id} items={o.items.filter((i: any) => i.kind !== 'part' && i.status !== 'cancelled').map((i: any) => i.description)} />}
+
       <PhotosTab o={o} reload={reload} />
 
       <details className="card group p-4">
@@ -288,21 +291,43 @@ function SimpleItemModal({ open, onClose, o, reload }: { open: boolean; onClose:
   )
 }
 
-/** "Pronto para entrega": uma pergunta sobre o retorno do cliente. */
+/** "Pronto para entrega": para cada serviço feito, quando o cliente deve voltar. */
 function FinishModal({ open, onClose, o, reload }: { open: boolean; onClose: () => void; o: any; reload: () => void }) {
   const toast = useToast()
+  const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
-  const opts: [string, number, number][] = [['Não precisa', 0, 0], ['3 meses', 3, 0], ['6 meses', 6, 0], ['1 ano', 12, 0], ['10 mil km', 0, 10000], ['6 meses ou 10 mil km', 6, 10000]]
-  async function go(m: number, km: number) {
+  const done = o.items.filter((i: any) => ['approved', 'in_progress', 'done'].includes(i.status) && i.kind !== 'part')
+  const [rows, setRows] = useState<Record<string, { label: string; months: number; km: number }>>({})
+  const [extra, setExtra] = useState({ label: '', months: 0, km: 0 })
+  useEffect(() => {
+    if (open) { setRows(Object.fromEntries(done.map((i: any) => [i.id, { label: i.description, months: 0, km: 0 }]))); setExtra({ label: '', months: 0, km: 0 }) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+  const chosen = [...Object.values(rows), extra].filter((r) => r.label.trim() && (r.months || r.km))
+  async function go() {
     setBusy(true)
-    try { await rpc('finish_service', { p_order: o.id, p_return_months: m || null, p_return_km: km || null }); toast.success('Carro pronto para entrega!'); reload(); onClose() }
-    catch (e) { toast.error(e) } finally { setBusy(false) }
+    try {
+      await rpc('finish_service_with_returns', { p_order: o.id, p_returns: chosen.map((r) => ({ label: r.label.trim(), months: r.months || '', km: r.km || '' })) })
+      toast.success(chosen.length ? `Pronto! ${chosen.length} lembrete(s) de retorno criado(s)` : 'Carro pronto para entrega!')
+      qc.invalidateQueries({ queryKey: ['order-reminders', o.id] }); reload(); onClose()
+    } catch (e) { toast.error(e) } finally { setBusy(false) }
   }
   return (
     <Modal open={open} onClose={onClose} title="Pronto para entrega">
-      <p className="mb-3 text-slate-600">Quando o cliente deve voltar para uma revisão? Ele será lembrado na hora certa.</p>
-      <div className="grid grid-cols-2 gap-2">
-        {opts.map(([l, m, km]) => <Button key={l} size="lg" variant={m || km ? 'secondary' : 'primary'} disabled={busy} onClick={() => go(m, km)}>{l}</Button>)}
+      <div className="space-y-4">
+        <p className="text-slate-600">Quando o cliente deve voltar para conferir o que foi feito? Toque no tempo e/ou km. Deixe em branco se não precisar.</p>
+        {done.map((i: any) => (
+          <div key={i.id} className="rounded-2xl border border-slate-200 p-3">
+            <input className="input mb-2 font-semibold" aria-label="Serviço" value={rows[i.id]?.label ?? i.description}
+              onChange={(e) => setRows((s) => ({ ...s, [i.id]: { ...s[i.id], label: e.target.value } }))} />
+            <ReturnPicker value={rows[i.id] ?? { months: 0, km: 0 }} onChange={(v) => setRows((s) => ({ ...s, [i.id]: { ...s[i.id], ...v } }))} />
+          </div>
+        ))}
+        <div className="rounded-2xl border border-dashed border-slate-300 p-3">
+          <input className="input mb-2" aria-label="Outro lembrete" placeholder="Outro lembrete (ex.: Revisão dos freios)" value={extra.label} onChange={(e) => setExtra((s) => ({ ...s, label: e.target.value }))} />
+          <ReturnPicker value={extra} onChange={(v) => setExtra((s) => ({ ...s, ...v }))} />
+        </div>
+        <Button size="lg" className="w-full" loading={busy} onClick={go}>{chosen.length ? `Pronto e criar ${chosen.length} lembrete(s)` : 'Pronto, sem lembrete'}</Button>
       </div>
     </Modal>
   )

@@ -20,6 +20,7 @@ import { ReceivePage } from '@/pages/Receive'
 import { ReportsPage } from '@/pages/Reports'
 import { SchedulePage } from '@/pages/Schedule'
 import { SettingsPage } from '@/pages/Settings'
+import { StaffPage } from '@/pages/Staff'
 import { TeamPage } from '@/pages/Team'
 import { VehicleDetail, VehiclesPage } from '@/pages/Vehicles'
 
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
       { path: 'financeiro', element: <Guard perm={['finance.view', 'cash.operate']}><FinancePage /></Guard> },
       { path: 'indicadores', element: <Guard perm="reports.view"><IndicatorsPage /></Guard> },
       { path: 'relatorios', element: <Guard perm="reports.view"><ReportsPage /></Guard> },
+      { path: 'funcionarios', element: <Guard perm="team.view"><StaffPage /></Guard> },
       { path: 'equipe', element: <Guard perm="team.view"><TeamPage /></Guard> },
       { path: 'configuracoes', element: <Guard perm="settings.manage"><SettingsPage /></Guard> },
       { path: '*', element: <div className="p-8 text-slate-500">Página não encontrada.</div> },
