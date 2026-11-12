@@ -40,8 +40,9 @@ const VehiclesPage = page(() => import('@/pages/Vehicles'), 'VehiclesPage')
 function Protected() {
   const { session, loading, ws, loginError } = useAuth()
   if (loading) return <Loading />
+  // Se a entrada automática falhar, mostra o login normal (com "Esqueci minha senha") para destravar.
   if (!session && isPublicMode) return loginError
-    ? <div className="mx-auto max-w-lg p-8"><ErrorBox error={{ message: loginError }} /></div>
+    ? <><div className="mx-auto max-w-sm px-4 pt-6"><ErrorBox error={{ message: loginError }} /></div><S><Login /></S></>
     : <Loading />
   if (!session) return <Navigate to="/entrar" replace />
   if (!ws) return (
@@ -63,7 +64,7 @@ function Guard({ perm, children }: { perm: string | string[]; children: ReactNod
 }
 
 const router = createBrowserRouter([
-  { path: '/entrar', element: isPublicMode ? <Navigate to="/" replace /> : <S><Login /></S> },
+  { path: '/entrar', element: <S><Login /></S> },
   { path: '/redefinir-senha', element: <S><ResetPassword /></S> },
   { path: '/convite', element: <S><AcceptInvite /></S> },
   { path: '/portal', element: <S><PortalPage /></S> },
