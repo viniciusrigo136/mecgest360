@@ -9,7 +9,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '@/auth/AuthProvider'
 import { Modal } from '@/components/ui'
 import { fmtPlate } from '@/lib/format'
-import { rpc, supabase } from '@/lib/supabase'
+import { isPublicMode, rpc, supabase } from '@/lib/supabase'
 import { applyTheme, getTheme, type Theme } from '@/lib/theme'
 
 type Item = { to: string; label: string; icon: LucideIcon; perm: string | string[]; badge?: boolean }
@@ -100,7 +100,7 @@ export function AppLayout() {
           </div>
           <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
             <span className="truncate">{session?.user.email}</span>
-            <button onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-100"><LogOut className="size-3.5" />Sair</button>
+            {!isPublicMode && <button onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-100"><LogOut className="size-3.5" />Sair</button>}
           </div>
         </div>
       </aside>
@@ -151,7 +151,7 @@ export function AppLayout() {
             <div className="flex-1 overflow-y-auto px-3 pb-3">{navList}</div>
             <div className="flex items-center justify-between gap-2 border-t border-slate-200 p-3 text-sm">
               <button onClick={toggleTheme} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3">{theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}{theme === 'dark' ? 'Modo claro' : 'Modo escuro'}</button>
-              <button onClick={() => supabase.auth.signOut()} className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-slate-600"><LogOut className="size-4" />Sair</button>
+              {!isPublicMode && <button onClick={() => supabase.auth.signOut()} className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-slate-600"><LogOut className="size-4" />Sair</button>}
             </div>
           </div>
         </div>

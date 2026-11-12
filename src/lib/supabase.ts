@@ -7,6 +7,13 @@ const key = (env.VITE_SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_
 
 export const isConfigured = Boolean(url && key)
 
+// Modo público: se a Vercel tiver VITE_PUBLIC_EMAIL e VITE_PUBLIC_PASSWORD, o site entra sozinho
+// com essa conta compartilhada e ninguém precisa fazer login.
+export const publicLogin = env.VITE_PUBLIC_EMAIL && env.VITE_PUBLIC_PASSWORD
+  ? { email: env.VITE_PUBLIC_EMAIL, password: env.VITE_PUBLIC_PASSWORD }
+  : null
+export const isPublicMode = publicLogin !== null
+
 // Somente a chave pública (anon/publishable) vai para o navegador.
 // A service role fica exclusivamente nas funções de servidor.
 export const supabase = createClient(url ?? 'http://localhost', key ?? 'missing', {

@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { ErrorBox, Loading, NoAccess, ToastProvider } from '@/components/ui'
 import { AppLayout } from '@/layout/AppLayout'
-import { isConfigured } from '@/lib/supabase'
+import { isConfigured, isPublicMode } from '@/lib/supabase'
 // Cada tela vira um arquivo separado: o celular baixa só o que vai abrir.
 // Se um arquivo antigo sumir depois de uma atualização, recarrega a página uma vez.
 function page<T extends string>(load: () => Promise<Record<T, ComponentType>>, name: T) {
@@ -38,8 +38,11 @@ const VehicleDetail = page(() => import('@/pages/Vehicles'), 'VehicleDetail')
 const VehiclesPage = page(() => import('@/pages/Vehicles'), 'VehiclesPage')
 
 function Protected() {
-  const { session, loading, ws } = useAuth()
+  const { session, loading, ws, loginError } = useAuth()
   if (loading) return <Loading />
+  if (!session && isPublicMode) return loginError
+    ? <div className="mx-auto max-w-lg p-8"><ErrorBox error={{ message: loginError }} /></div>
+    : <Loading />
   if (!session) return <Navigate to="/entrar" replace />
   if (!ws) return (
     <div className="mx-auto max-w-lg p-8">
@@ -60,7 +63,7 @@ function Guard({ perm, children }: { perm: string | string[]; children: ReactNod
 }
 
 const router = createBrowserRouter([
-  { path: '/entrar', element: <S><Login /></S> },
+  { path: '/entrar', element: isPublicMode ? <Navigate to="/" replace /> : <S><Login /></S> },
   { path: '/redefinir-senha', element: <S><ResetPassword /></S> },
   { path: '/convite', element: <S><AcceptInvite /></S> },
   { path: '/portal', element: <S><PortalPage /></S> },
