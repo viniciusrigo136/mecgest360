@@ -37,7 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const autoLogin = async () => {
       if (!publicLogin) return
       const { error } = await supabase.auth.signInWithPassword(publicLogin)
-      setLoginError(error ? 'Não foi possível abrir o sistema automaticamente. Tente recarregar a página.' : null)
+      setLoginError(!error ? null
+        : /invalid login/i.test(error.message) ? 'Entrada automática recusada: o e-mail ou a senha configurados na Vercel não batem com nenhuma conta do sistema.'
+        : /not confirmed/i.test(error.message) ? 'Entrada automática recusada: o e-mail da conta compartilhada ainda não foi confirmado.'
+        : `Não foi possível abrir o sistema automaticamente (${error.message}).`)
     }
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) await autoLogin()
